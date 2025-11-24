@@ -1,0 +1,7 @@
+{
+  "name": "Bua X1",
+  "description": "A conversational voice bot plugin supporting 11 South African languages with unique personalities.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
