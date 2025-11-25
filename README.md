@@ -3,7 +3,6 @@
 
 ## Prerequisites
 - Node.js (Latest LTS recommended)
-- A Gemini API Key from Google AI Studio
 
 ## Setup
 
