@@ -339,7 +339,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
               sessionPromise.then(session => {
-                session.sendRealtimeInput({ media: pcmBlob });
+                // TS Cast as 'any' to avoid "Type 'string' has no properties in common with type 'Content'"
+                // This seems to be a type definition issue in the SDK beta vs the runtime requirement.
+                session.sendRealtimeInput({ media: pcmBlob } as any);
               });
             };
 
@@ -364,7 +366,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 if (calls && calls.length > 0) {
                     const call = calls[0];
                     if (call.name === 'report_language_change') {
-                        const lang = call.args['language'] as string;
+                        // FIX: Added safe access to optional args
+                        const lang = call.args ? (call.args['language'] as string) : null;
                         if (lang) setDetectedLanguage(lang);
                         sessionPromise.then(session => {
                             session.sendToolResponse({
