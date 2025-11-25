@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, (process as any).cwd(), '');
   return {
     plugins: [react()],
+    base: './', // Fixes 404 errors on GitHub Pages
     define: {
       // Polyfill process.env.API_KEY so your existing code works without modification
       'process.env.API_KEY': JSON.stringify(env.API_KEY)
