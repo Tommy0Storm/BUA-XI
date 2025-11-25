@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Bua XI - The Digital Soundprint of South Africa
 
-This contains everything you need to run your app locally.
+## Prerequisites
+- Node.js (Latest LTS recommended)
+- A Gemini API Key from Google AI Studio
 
-View your app in AI Studio: https://ai.studio/apps/drive/1yPKqnmkrG192i6TZUCiTZhIsVZ_IoMqv
+## Setup
 
-## Run Locally
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-**Prerequisites:**  Node.js
+2.  **Environment Setup:**
+    - Create a `.env` file in the root directory (copy from `.env.example`).
+    - Add your API Key:
+      ```
+      API_KEY=your_actual_api_key_here
+      ```
 
+3.  **Run Development Server:**
+    ```bash
+    npm run dev
+    ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+4.  **Open in Browser:**
+    Click the link provided in the terminal (usually http://localhost:5173).
