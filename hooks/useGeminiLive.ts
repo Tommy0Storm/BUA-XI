@@ -384,8 +384,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                                 functionResponses: [{
                                     id: call.id,
                                     name: call.name,
-                                    // Inject a strict instruction in the response to ensure next audio turn is in correct language
-                                    response: { result: `[SYSTEM: LANGUAGE LOCKED TO ${lang}]. STOP SPEAKING ENGLISH. SPEAK ONLY ${lang} NOW.` }
+                                    // Inject strict instruction to ensure accent adoption
+                                    response: { result: `[SYSTEM: LANGUAGE DETECTED AS ${lang}]. SWITCH IMMEDIATELY. USE AUTHENTIC ${lang} ACCENT/GRAMMAR. DO NOT USE GENERIC AI VOICE.` }
                                 }]
                             });
                         });
