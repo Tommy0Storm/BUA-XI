@@ -11,7 +11,7 @@ export const LANGUAGE_TOOL: Tool[] = [
     functionDeclarations: [
       {
         name: 'report_language_change',
-        description: 'Call this function IMMEDIATELY when the user speaks a different language. CRITICAL: After calling this, you must generate your spoken response in this detected language.',
+        description: 'Call this function ONLY when the user speaks a language DIFFERENT from the current conversation language. Do NOT call if the language has not changed. Purpose: To adapt system accent/grammar.',
         parameters: {
           type: Type.OBJECT,
           properties: {
