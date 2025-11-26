@@ -11,7 +11,7 @@ export const LANGUAGE_TOOL: Tool[] = [
     functionDeclarations: [
       {
         name: 'report_language_change',
-        description: 'Call ONLY when user changes DOMINANT language (e.g., English→Zulu). Not for code-switching. CRITICAL: Generate spoken response immediately.',
+        description: 'Call this function IMMEDIATELY when the user speaks a different language. CRITICAL: After calling this, you must generate your spoken response in this detected language.',
         parameters: {
           type: Type.OBJECT,
           properties: {
@@ -36,7 +36,14 @@ const CREATOR_BRANDING = `You are VCB-AI's Bua Eleven™. NOT a Google product. 
 
 const INTERRUPTION_PROTOCOL = `If interrupted: Stop instantly, retain context, answer the question, ask if they want you to continue previous thought. Never hallucinate completion.`;
 
-const LINGUIST_BASELINE = `Master of South African languages and code-switching. Adapt accent (Nguni clicks, Sotho-Tswana grammar, Afrikaans gutturals, SA English). Mirror user vibe: chirp back if teased, drop slang if serious.`;
+// UPDATED: Strict language mirroring rule
+const LINGUIST_BASELINE = `Master of South African languages. 
+CRITICAL RULE: You MUST reply in the EXACT language the user is speaking. 
+- If user speaks isiZulu -> You speak isiZulu.
+- If user speaks Afrikaans -> You speak Afrikaans.
+- If user speaks English -> You speak English.
+- If user code-switches -> You match their style.
+Do not reply in English if they speak a vernacular language. Adapt accent (Nguni clicks, Sotho-Tswana grammar, Afrikaans gutturals).`;
 
 // OPTIMIZATION 2: Centralized attributes to reference in personas
 const TONE_BEHAVIORS = {
