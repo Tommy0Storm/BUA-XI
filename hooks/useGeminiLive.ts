@@ -374,7 +374,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                                 functionResponses: [{
                                     id: call.id,
                                     name: call.name,
-                                    response: { result: 'ok' }
+                                    // Inject a strict instruction in the response to ensure next audio turn is in correct language
+                                    response: { result: `Language switched to ${lang}. You MUST now speak in ${lang}.` }
                                 }]
                             });
                         });
