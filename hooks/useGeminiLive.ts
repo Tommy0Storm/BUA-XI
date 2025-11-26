@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
 import { createPcmBlob, decodeAudioData, base64ToUint8Array, hasSpeech } from '../utils/audioUtils';
@@ -19,6 +19,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   
   // Timer State - 120 seconds (2 minutes)
   const [timeLeft, setTimeLeft] = useState(120);
+
+  // API Key Management
+  const apiKeys = useMemo(() => 
+    apiKey ? apiKey.split(',').map(k => k.trim()).filter(k => k.length > 0) : [], 
+  [apiKey]);
+  const currentKeyIndexRef = useRef(0);
 
   // Refs for audio management to avoid re-renders
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -170,11 +176,15 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   }, [stopAudio]);
 
   const connect = useCallback(async () => {
-    if (!apiKey) {
+    if (apiKeys.length === 0) {
       console.error('[GeminiLive] API Key Missing');
       setError('API Key is missing.');
       return;
     }
+
+    // Use the current key index to select the key
+    const currentKey = apiKeys[currentKeyIndexRef.current];
+    console.log(`[GeminiLive] Connecting with key index: ${currentKeyIndexRef.current}`);
 
     try {
       console.log('[GeminiLive] Starting Connection...');
@@ -261,7 +271,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       volumeAnimationRef.current = requestAnimationFrame(updateVolume);
 
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: currentKey });
 
       const currentPersona = personaRef.current;
       
@@ -375,7 +385,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                                     id: call.id,
                                     name: call.name,
                                     // Inject a strict instruction in the response to ensure next audio turn is in correct language
-                                    response: { result: `Language switched to ${lang}. You MUST now speak in ${lang}.` }
+                                    response: { result: `[SYSTEM: LANGUAGE LOCKED TO ${lang}]. STOP SPEAKING ENGLISH. SPEAK ONLY ${lang} NOW.` }
                                 }]
                             });
                         });
@@ -455,6 +465,34 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         }
       });
 
+      // Handle Key Rotation/Failover on initial connection failure
+      sessionPromise.catch(async (err) => {
+         // Only retry if we haven't manually disconnected (sessionRef check)
+         if (sessionRef.current !== sessionPromise) {
+             return;
+         }
+
+         console.warn(`[GeminiLive] Connection failed with key index ${currentKeyIndexRef.current}`, err);
+
+         // If we have more keys to try
+         if (currentKeyIndexRef.current < apiKeys.length - 1) {
+             console.log("[GeminiLive] Switching to backup API key...");
+             currentKeyIndexRef.current += 1;
+             
+             // Cleanup current failed attempt
+             stopAudio();
+             
+             // Add slight delay to ensure cleanup settles, then retry
+             setTimeout(() => connect(), 200);
+         } else {
+             // All keys exhausted
+             console.error("[GeminiLive] All API keys exhausted.");
+             setStatus('error');
+             setError("Connection failed. Quota may be depleted.");
+             stopAudio();
+         }
+      });
+
       sessionRef.current = sessionPromise;
 
     } catch (err: any) {
@@ -463,7 +501,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       setError(err.message || "Failed to connect");
       stopAudio();
     }
-  }, [apiKey, stopAudio, disconnect]);
+  }, [apiKeys, stopAudio, disconnect]); // Dependencies updated
 
   return {
     status,
