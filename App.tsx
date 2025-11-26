@@ -136,7 +136,7 @@ const App: React.FC = () => {
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 mb-3">Low Latency Voice</h3>
                     <p className="text-gray-500 leading-relaxed text-sm">
-                        Powered by Gemini Native Audio 2.5, experience real-time conversations with sub-second response times.
+                        Powered by VCB BUA XI Native Audio, experience real-time conversations with sub-second response times.
                     </p>
                 </div>
             </div>
