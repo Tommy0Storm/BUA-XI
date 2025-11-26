@@ -55,6 +55,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const personaRef = useRef<Persona>(persona);
   const isMutedRef = useRef(isMuted);
   const isMicMutedRef = useRef(isMicMuted);
+  const detectedLanguageRef = useRef(detectedLanguage); // Ref to track language without re-renders
 
   // Silence Detection Refs
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
@@ -63,6 +64,10 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
+
+  useEffect(() => {
+    detectedLanguageRef.current = detectedLanguage;
+  }, [detectedLanguage]);
 
   // Handle mute toggling on active audio context
   useEffect(() => {
@@ -375,17 +380,37 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 const calls = msg.toolCall.functionCalls;
                 if (calls && calls.length > 0) {
                     const call = calls[0];
+                    
                     if (call.name === 'report_language_change') {
+                        // FIX: Treat language change as a "soft interruption" to prevent double-speak/echo
+                        // If the model started speaking BEFORE calling this tool, we must silence that audio
+                        console.log("[GeminiLive] Language Tool Triggered. Silencing pre-switch audio.");
+                        interruptionEpochRef.current += 1;
+                        activeSourcesRef.current.forEach(src => {
+                            try { src.stop(); src.disconnect(); } catch(e){}
+                        });
+                        activeSourcesRef.current.clear();
+                        if (outputCtx) { nextStartTimeRef.current = outputCtx.currentTime; }
+
                         // FIX: Added safe access to optional args
                         const lang = call.args ? (call.args['language'] as string) : null;
-                        if (lang) setDetectedLanguage(lang);
+                        
+                        if (lang) {
+                            setDetectedLanguage(lang);
+                        }
+
+                        // Determine strictness based on whether language ACTUALLY changed
+                        const isSameLanguage = lang === detectedLanguageRef.current;
+                        const responseContent = isSameLanguage
+                            ? `[SYSTEM: Language is confirmed as ${lang}. Continue responding naturally.]`
+                            : `[SYSTEM: LANGUAGE CHANGE DETECTED: ${lang}]. SWITCH IMMEDIATELY. ADOPT AUTHENTIC ${lang} ACCENT & GRAMMAR.`;
+
                         sessionPromise.then(session => {
                             session.sendToolResponse({
                                 functionResponses: [{
                                     id: call.id,
                                     name: call.name,
-                                    // Inject strict instruction to ensure accent adoption
-                                    response: { result: `[SYSTEM: LANGUAGE DETECTED AS ${lang}]. SWITCH IMMEDIATELY. USE AUTHENTIC ${lang} ACCENT/GRAMMAR. DO NOT USE GENERIC AI VOICE.` }
+                                    response: { result: responseContent }
                                 }]
                             });
                         });
