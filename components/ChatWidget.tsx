@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
 import AudioVisualizer from './AudioVisualizer';
 import { 
   MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock
+  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
@@ -190,7 +191,7 @@ export const ChatWidget: React.FC = () => {
   return (
     <div className="fixed bottom-6 right-6 z-50 font-sans">
       {isOpen && status !== 'connected' && (
-        <div className="mb-4 w-[22rem] sm:w-96 bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col transition-all duration-300 ease-in-out transform origin-bottom-right max-h-[85vh]">
+        <div className="mb-4 w-[22rem] sm:w-[26rem] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col transition-all duration-300 ease-in-out transform origin-bottom-right max-h-[85vh]">
           
           <div className="relative bg-gray-900 p-6 flex justify-between items-start shrink-0">
              {/* SA Flag Gradient Line */}
@@ -206,7 +207,7 @@ export const ChatWidget: React.FC = () => {
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                     <h3 className="font-bold text-white text-lg tracking-tight">VCB-AI Neural Link</h3>
                 </div>
-                <p className="text-xs text-gray-400 font-medium">Select a persona to begin</p>
+                <p className="text-xs text-gray-400 font-medium">Select a specialist for your needs</p>
             </div>
             
             <button onClick={toggleWidget} className="hover:bg-white/10 p-2 rounded-full transition text-gray-400 hover:text-white">
@@ -234,38 +235,65 @@ export const ChatWidget: React.FC = () => {
                 )}
 
                 {status !== 'connecting' && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {PERSONAS.map(persona => (
                             <button
                                 key={persona.id}
                                 onClick={() => handlePersonaSelect(persona.id)}
-                                className={`group relative p-4 rounded-2xl border text-left transition-all duration-200 flex items-center space-x-4
+                                className={`w-full group relative p-5 rounded-3xl border text-left transition-all duration-300 flex flex-col space-y-3
                                     ${selectedPersonaId === persona.id 
-                                        ? 'bg-white border-yellow-400 shadow-lg shadow-yellow-100 scale-[1.02]' 
-                                        : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-md'
+                                        ? 'bg-white border-yellow-400 shadow-xl shadow-yellow-100 ring-1 ring-yellow-400/20' 
+                                        : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-lg'
                                     }
                                 `}
                             >
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors
-                                    ${selectedPersonaId === persona.id 
-                                        ? 'bg-yellow-50 text-yellow-600' 
-                                        : 'bg-gray-50 text-gray-500 group-hover:bg-gray-100 group-hover:text-gray-900'
-                                    }
-                                `}>
-                                    {getPersonaIcon(persona.icon, 24)}
-                                </div>
-                                
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center mb-0.5">
-                                        <span className={`font-bold text-sm ${selectedPersonaId === persona.id ? 'text-gray-900' : 'text-gray-700'}`}>
-                                            {persona.name}
-                                        </span>
-                                        {selectedPersonaId === persona.id && (
-                                            <span className="text-yellow-500"><Check size={16} /></span>
-                                        )}
+                                <div className="flex items-start space-x-4">
+                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300
+                                        ${selectedPersonaId === persona.id 
+                                            ? 'bg-yellow-50 text-yellow-600 scale-105' 
+                                            : 'bg-gray-50 text-gray-500 group-hover:bg-gray-100 group-hover:text-gray-900'
+                                        }
+                                    `}>
+                                        {getPersonaIcon(persona.icon, 28)}
                                     </div>
-                                    <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 mb-1">{persona.role}</div>
-                                    <p className="text-[11px] text-gray-500 leading-snug line-clamp-2">{persona.description}</p>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-center mb-0.5">
+                                            <span className={`font-bold text-base ${selectedPersonaId === persona.id ? 'text-gray-900' : 'text-gray-700'}`}>
+                                                {persona.name}
+                                            </span>
+                                            {selectedPersonaId === persona.id && (
+                                                <div className="bg-yellow-100 text-yellow-700 p-1 rounded-full">
+                                                    <Check size={14} strokeWidth={3} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 mb-2">{persona.role}</div>
+                                        
+                                        {/* Voice Description Badge */}
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                                                <Volume2 size={10} className="mr-1" />
+                                                {persona.voiceDescription}
+                                            </span>
+                                        </div>
+
+                                        <p className="text-xs text-gray-500 leading-relaxed mb-3">{persona.description}</p>
+                                    </div>
+                                </div>
+
+                                {/* Capabilities Tags */}
+                                <div className="flex flex-wrap gap-1.5 pl-[4.5rem]">
+                                    {persona.capabilities.map((cap, idx) => (
+                                        <span key={idx} className={`text-[10px] px-2 py-1 rounded-md font-medium border
+                                             ${selectedPersonaId === persona.id
+                                                ? 'bg-yellow-50 border-yellow-100 text-yellow-700'
+                                                : 'bg-gray-50 border-gray-100 text-gray-500'
+                                             }
+                                        `}>
+                                            {cap}
+                                        </span>
+                                    ))}
                                 </div>
                             </button>
                         ))}
@@ -274,16 +302,16 @@ export const ChatWidget: React.FC = () => {
           </div>
 
           {status !== 'connecting' && (
-              <div className="p-4 bg-white border-t border-gray-100">
+              <div className="p-5 bg-white border-t border-gray-100">
                   <button
                       onClick={connect}
                       className="w-full py-4 rounded-2xl font-bold text-white shadow-xl shadow-green-900/10 bg-[#09090b] hover:bg-black transition-all transform active:scale-[0.98] flex items-center justify-center space-x-3 group relative overflow-hidden"
                   >
                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                      <div className="p-1 bg-white/20 rounded-full">
-                        <Mic size={16} className="text-white" />
+                      <div className="p-1.5 bg-white/20 rounded-full">
+                        <Mic size={18} className="text-white" />
                       </div>
-                      <span>Start Session</span>
+                      <span className="text-lg">Start Session</span>
                       <ChevronRight size={18} className="opacity-50 group-hover:translate-x-1 transition-transform" />
                   </button>
               </div>
