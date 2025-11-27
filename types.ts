@@ -9,7 +9,7 @@ export interface Persona {
   id: string;
   name: string;
   gender: 'Male' | 'Female';
-  voiceName: string; // The Gemini API voice name (e.g., Fenrir, Puck)
+  voiceName: string; // The Engine voice name (e.g., Fenrir, Puck)
   role: string;
   description: string;
   icon: string;
