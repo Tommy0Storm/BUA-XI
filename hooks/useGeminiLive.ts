@@ -9,6 +9,8 @@ export interface UseGeminiLiveProps {
   persona: Persona;
 }
 
+const VOLUME_GAIN = 3.0; // Boost volume by 3x (+9.5dB) to compensate for quiet raw PCM
+
 export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [volume, setVolume] = useState(0); // For visualizer (Input OR Output)
@@ -72,8 +74,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   // Handle mute toggling on active audio context
   useEffect(() => {
     isMutedRef.current = isMuted;
-    if (gainNodeRef.current) {
-        gainNodeRef.current.gain.value = isMuted ? 0 : 1;
+    if (gainNodeRef.current && gainNodeRef.current.context) {
+        const ctx = gainNodeRef.current.context;
+        const currentTime = ctx.currentTime;
+        // Use setTargetAtTime for smooth volume transitions (prevents clicks)
+        gainNodeRef.current.gain.setTargetAtTime(isMuted ? 0 : VOLUME_GAIN, currentTime, 0.05);
     }
   }, [isMuted]);
 
@@ -215,16 +220,28 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       nextStartTimeRef.current = outputCtx.currentTime;
 
       // --- OUTPUT SETUP ---
-      // Graph: Source -> Gain -> Analyser -> Destination
+      // Graph: Source -> Gain (Boost) -> Compressor -> Analyser -> Destination
+      
+      // Dynamics Compressor: Prevents clipping when we boost volume
+      const compressor = outputCtx.createDynamicsCompressor();
+      compressor.threshold.value = -15; // Start compressing at -15dB
+      compressor.knee.value = 30; // Soft knee for natural sound
+      compressor.ratio.value = 12; // High compression ratio for loud peaks
+      compressor.attack.value = 0.003; // Fast attack
+      compressor.release.value = 0.25; // Moderate release
+
       const outputAnalyser = outputCtx.createAnalyser();
       outputAnalyser.fftSize = 256;
       outputAnalyser.smoothingTimeConstant = 0.3; // Responsive
       outputAnalyserRef.current = outputAnalyser;
 
       const gainNode = outputCtx.createGain();
-      gainNode.gain.value = isMutedRef.current ? 0 : 1;
+      // Apply initial volume boost (3x)
+      gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
       
-      gainNode.connect(outputAnalyser);
+      // Connect Graph
+      gainNode.connect(compressor);
+      compressor.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
       
       gainNodeRef.current = gainNode;
