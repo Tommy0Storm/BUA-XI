@@ -95,7 +95,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   }, []);
 
   const stopAudio = useCallback(() => {
-    console.log('[GeminiLive] Stopping Audio...');
+    console.log('[BuaX1] Stopping Audio...');
     
     // Clear demo timer
     if (demoTimerRef.current) {
@@ -162,18 +162,18 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         audioContextRef.current = null;
     }
     setVolume(0);
-    console.log('[GeminiLive] Audio Stopped.');
+    console.log('[BuaX1] Audio Stopped.');
   }, []);
 
   const disconnect = useCallback(async (errorMessage?: string) => {
-    console.log('[GeminiLive] Disconnecting session...');
+    console.log('[BuaX1] Disconnecting session...');
     if (sessionRef.current) {
         try {
             const session = await sessionRef.current;
             session.close();
-            console.log('[GeminiLive] Session closed successfully.');
+            console.log('[BuaX1] Session closed successfully.');
         } catch (e) {
-            console.error('[GeminiLive] Error closing session:', e);
+            console.error('[BuaX1] Error closing session:', e);
         }
     }
     sessionRef.current = null;
@@ -187,17 +187,17 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
   const connect = useCallback(async () => {
     if (apiKeys.length === 0) {
-      console.error('[GeminiLive] API Key Missing');
+      console.error('[BuaX1] API Key Missing');
       setError('API Key is missing.');
       return;
     }
 
     // Use the current key index to select the key
     const currentKey = apiKeys[currentKeyIndexRef.current];
-    console.log(`[GeminiLive] Connecting with key index: ${currentKeyIndexRef.current}`);
+    console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current}`);
 
     try {
-      console.log('[GeminiLive] Starting Connection...');
+      console.log('[BuaX1] Starting Connection...');
       setStatus('connecting');
       setError(null);
       setDetectedLanguage('Auto-Detect');
@@ -252,7 +252,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       gainNodeRef.current = gainNode;
 
       // --- INPUT SETUP ---
-      console.log('[GeminiLive] Requesting Mic Access...');
+      console.log('[BuaX1] Requesting Mic Access...');
       // Request explicit echo cancellation and noise suppression
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
@@ -262,7 +262,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               channelCount: 1
           } 
       });
-      console.log('[GeminiLive] Mic Access Granted');
+      console.log('[BuaX1] Mic Access Granted');
       streamRef.current = stream;
 
       const inputAnalyser = inputCtx.createAnalyser();
@@ -327,7 +327,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         },
         callbacks: {
           onopen: () => {
-            console.log('[GeminiLive] WebSocket Opened / Session Connected');
+            console.log('[BuaX1] WebSocket Opened / Session Connected');
             setStatus('connected');
             lastUserSpeechTimeRef.current = Date.now();
 
@@ -335,7 +335,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             demoTimerRef.current = window.setInterval(() => {
                 setTimeLeft(prev => {
                     if (prev <= 1) {
-                         console.log('[GeminiLive] Demo time limit reached.');
+                         console.log('[BuaX1] Demo time limit reached.');
                          disconnect("Demo time limit reached. Please reload or contact sales.");
                          return 0;
                     }
@@ -412,7 +412,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     if (call.name === 'report_language_change') {
                         // FIX: Treat language change as a "soft interruption" to prevent double-speak/echo
                         // If the model started speaking BEFORE calling this tool, we must silence that audio
-                        console.log("[GeminiLive] Language Tool Triggered. Silencing pre-switch audio.");
+                        console.log("[BuaX1] Language Tool Triggered. Silencing pre-switch audio.");
                         interruptionEpochRef.current += 1;
                         activeSourcesRef.current.forEach(src => {
                             try { src.stop(); src.disconnect(); } catch(e){}
@@ -451,7 +451,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
              // Interruption Logic
              if (msg.serverContent?.interrupted) {
-                console.log("[GeminiLive] Interruption detected. stopping audio.");
+                console.log("[BuaX1] Interruption detected. stopping audio.");
                 // Increment epoch to invalidate any processing/pending chunks
                 interruptionEpochRef.current += 1;
                 
@@ -488,7 +488,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                         // 2. CHECK EPOCH: If interruption happened while we were decoding, DROP this chunk.
                         // This prevents "ghost" audio from playing after user interrupted.
                         if (currentEpoch !== interruptionEpochRef.current) {
-                            console.log("[GeminiLive] Dropping stale audio chunk after interruption.");
+                            console.log("[BuaX1] Dropping stale audio chunk after interruption.");
                             return;
                         }
 
@@ -505,7 +505,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                             activeSourcesRef.current.delete(source);
                         };
                      } catch (err) {
-                         console.error("[GeminiLive] Error decoding audio chunk", err);
+                         console.error("[BuaX1] Error decoding audio chunk", err);
                      }
                  }
              }
@@ -514,7 +514,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             setStatus('disconnected');
           },
           onerror: (err) => {
-            console.error("[GeminiLive] Error", err);
+            console.error("[BuaX1] Error", err);
             setError("Connection lost.");
             setStatus('error');
           }
@@ -528,11 +528,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              return;
          }
 
-         console.warn(`[GeminiLive] Connection failed with key index ${currentKeyIndexRef.current}`, err);
+         console.warn(`[BuaX1] Connection failed with key index ${currentKeyIndexRef.current}`, err);
 
          // If we have more keys to try
          if (currentKeyIndexRef.current < apiKeys.length - 1) {
-             console.log("[GeminiLive] Switching to backup API key...");
+             console.log("[BuaX1] Switching to backup API key...");
              currentKeyIndexRef.current += 1;
              
              // Cleanup current failed attempt
@@ -542,7 +542,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              setTimeout(() => connect(), 200);
          } else {
              // All keys exhausted
-             console.error("[GeminiLive] All API keys exhausted.");
+             console.error("[BuaX1] All API keys exhausted.");
              setStatus('error');
              setError("Connection failed. Quota may be depleted.");
              stopAudio();
@@ -552,7 +552,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       sessionRef.current = sessionPromise;
 
     } catch (err: any) {
-      console.error('[GeminiLive] Connection Setup Error:', err);
+      console.error('[BuaX1] Connection Setup Error:', err);
       setStatus('error');
       setError(err.message || "Failed to connect");
       stopAudio();
