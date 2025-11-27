@@ -25,6 +25,7 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
+  const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const apiKey = process.env.API_KEY;
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
@@ -45,6 +46,41 @@ export const ChatWidget: React.FC = () => {
 
   const handlePersonaSelect = (id: string) => {
     setSelectedPersonaId(id);
+  };
+
+  const playPreview = (personaId: string, gender: string, e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent card selection
+      if (playingPreview) return; // Prevent overlap
+
+      setPlayingPreview(personaId);
+      
+      // Synthetic Voice Preview (simulating gender pitch)
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      // Male ~ 110-140Hz, Female ~ 200-250Hz
+      const baseFreq = gender === 'Male' ? 130 : 220;
+      
+      osc.type = 'triangle'; // Richer sound than sine
+      osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(baseFreq - 20, ctx.currentTime + 0.5); // Slight intonation drop
+      
+      // Envelope
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 1.2);
+      
+      setTimeout(() => {
+          setPlayingPreview(null);
+          ctx.close();
+      }, 1200);
   };
 
   // Format timer as MM:SS
@@ -262,9 +298,19 @@ export const ChatWidget: React.FC = () => {
                                             <span className={`font-bold text-base ${selectedPersonaId === persona.id ? 'text-gray-900' : 'text-gray-700'}`}>
                                                 {persona.name}
                                             </span>
-                                            {selectedPersonaId === persona.id && (
+                                            {selectedPersonaId === persona.id ? (
                                                 <div className="bg-yellow-100 text-yellow-700 p-1 rounded-full">
                                                     <Check size={14} strokeWidth={3} />
+                                                </div>
+                                            ) : (
+                                                // Preview Button
+                                                <div 
+                                                    role="button"
+                                                    onClick={(e) => playPreview(persona.id, persona.gender, e)}
+                                                    className="p-1.5 rounded-full bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                                    title="Hear Voice Preview"
+                                                >
+                                                    {playingPreview === persona.id ? <Activity size={14} className="animate-pulse" /> : <Play size={14} fill="currentColor" />}
                                                 </div>
                                             )}
                                         </div>
