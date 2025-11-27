@@ -428,10 +428,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                         }
 
                         // Determine strictness based on whether language ACTUALLY changed
+                        // Note: detectedLanguageRef is updated via useEffect, so current Ref is technically the 'old' language until next render
                         const isSameLanguage = lang === detectedLanguageRef.current;
+                        
+                        // STRICTER INSTRUCTION PROTOCOL
                         const responseContent = isSameLanguage
-                            ? `[SYSTEM: MAINTAIN ${lang}. Ensure accent is PURE South African. NO American/Indian intonation.]`
-                            : `[SYSTEM: SWITCH to ${lang} immediately. ACKNOWLEDGE switch. SPEAK ONLY ${lang}. ACCENT must be authentic South African. NO American/Indian accents.]`;
+                            ? `[SYSTEM: MONITORING. You are correctly speaking ${lang}. CRITICAL: MAINTAIN AUTHENTIC SOUTH AFRICAN ACCENT. Do not drift into American or Indian intonations.]`
+                            : `[SYSTEM: LANGUAGE SWITCH to ${lang} CONFIRMED. EXECUTE: 1. Acknowledge change (e.g. "Askies, let's speak ${lang}"). 2. SPEAK ONLY ${lang}. 3. FORCE South African Accent. 4. BAN American/Indian accents.]`;
 
                         sessionPromise.then(session => {
                             session.sendToolResponse({
