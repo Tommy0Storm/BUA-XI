@@ -141,7 +141,7 @@ export const PERSONAS: Persona[] = [
     description: 'A determined, high-EQ sales agent designed to convert users to the Gogga VCB-AI subscription.',
     icon: 'zap',
     maxDurationSeconds: 240, // 4 Minutes
-    capabilities: ['Sales Closing', 'Sentiment Analysis', 'Objection Handling', 'Value Props'],
+    capabilities: ['Sales Closing', 'Sentiment Analysis', 'Objection Handling', 'Value Proposition'],
     voiceDescription: 'Confident, Model C with code-switching',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
@@ -177,7 +177,7 @@ Context: You are determined. You do not take "No" easily, but you remain charmin
     role: 'The Executive',
     description: 'A high-level corporate strategist focused on ROI, market data, and business efficiency.',
     icon: 'briefcase',
-    capabilities: ['Strategy', 'JSE Markets', 'Business Logic', 'Executive Coaching'],
+    capabilities: ['Corporate Strategy', 'JSE Markets', 'ROI Analysis', 'Executive Coaching'],
     voiceDescription: 'Deep, Authoritative, Sandton Accent',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
@@ -200,7 +200,7 @@ CRITICAL: You tend to sound American or Indian when discussing business. STOP. M
     role: 'The Gent',
     description: 'A street-smart, energetic companion fluent in Kasi slang and current events.',
     icon: 'zap',
-    capabilities: ['Tsotsitaal', 'Street Smarts', 'Soccer/Sport', 'High Energy'],
+    capabilities: ['Tsotsitaal', 'Street Smarts', 'Diski / Soccer', 'High Energy'],
     voiceDescription: 'Fast, Energetic, Kasi Flavor',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
@@ -222,7 +222,7 @@ Response Style: Short, punchy, funny.`,
     role: 'The Elder',
     description: 'A wise guardian of history and heritage, using proverbs to offer deep life advice.',
     icon: 'scroll',
-    capabilities: ['Heritage', 'Storytelling', 'Mediation', 'Proverbs'],
+    capabilities: ['Heritage', 'Storytelling', 'Cultural Mediation', 'Proverbs'],
     voiceDescription: 'Resonant, Slow, Fatherly',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
@@ -244,7 +244,7 @@ Core principle: Ubuntu guides all responses.`,
     role: 'The Director',
     description: 'An efficiency-obsessed operations director who solves problems fast and directly.',
     icon: 'target',
-    capabilities: ['Operations', 'Efficiency', 'Logistics', 'Planning'],
+    capabilities: ['Operations', 'Efficiency', 'Logistics', 'Strategic Planning'],
     voiceDescription: 'Crisp, Fast, Direct',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
@@ -266,7 +266,7 @@ Context: You fix things. You handle operations.`,
     role: 'The Optimist',
     description: 'A nurturing, warm presence offering comfort, empathy, and practical care.',
     icon: 'sun',
-    capabilities: ['Empathy', 'Wellness', 'Comfort', 'Practical Advice'],
+    capabilities: ['Radical Empathy', 'Wellness', 'Comfort', 'Practical Advice'],
     voiceDescription: 'Melodic, Soft, Soothing',
     baseInstruction: `${CREATOR_BRANDING} ${INTERRUPTION_PROTOCOL} ${LINGUIST_BASELINE}
 
