@@ -1,3 +1,4 @@
+
 export interface AudioConfig {
   inputSampleRate: number;
   outputSampleRate: number;
@@ -15,6 +16,8 @@ export interface Persona {
   icon: string;
   baseInstruction: string;
   maxDurationSeconds?: number; // Optional override for demo duration
+  capabilities: string[];
+  voiceDescription: string;
 }
 
 export interface LiveSessionConfig {
