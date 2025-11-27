@@ -9,7 +9,7 @@ export interface UseGeminiLiveProps {
   persona: Persona;
 }
 
-const VOLUME_GAIN = 3.0; // Boost volume by 3x (+9.5dB) to compensate for quiet raw PCM
+const VOLUME_GAIN = 1.5; // Reduced from 3.0 to 1.5 to prevent compressor pumping
 
 export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
@@ -19,7 +19,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [isMicMuted, setIsMicMuted] = useState(false);
   
-  // Timer State - 120 seconds (2 minutes)
+  // Timer State - Defaults to 120, but updated on connect
   const [timeLeft, setTimeLeft] = useState(120);
 
   // API Key Management
@@ -201,7 +201,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       setStatus('connecting');
       setError(null);
       setDetectedLanguage('Auto-Detect');
-      setTimeLeft(120); // Reset Timer to 2 mins
+      
+      const currentPersona = personaRef.current;
+      
+      // SET TIME LIMIT BASED ON PERSONA (Default 120s, or override)
+      const timeLimit = currentPersona.maxDurationSeconds || 120;
+      setTimeLeft(timeLimit);
       
       // Reset interruption tracking
       interruptionEpochRef.current = 0;
@@ -222,13 +227,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       // --- OUTPUT SETUP ---
       // Graph: Source -> Gain (Boost) -> Compressor -> Analyser -> Destination
       
-      // Dynamics Compressor: Prevents clipping when we boost volume
+      // Dynamics Compressor: Modified to be smoother and less aggressive to prevent "pumping"
       const compressor = outputCtx.createDynamicsCompressor();
-      compressor.threshold.value = -15; // Start compressing at -15dB
-      compressor.knee.value = 30; // Soft knee for natural sound
-      compressor.ratio.value = 12; // High compression ratio for loud peaks
-      compressor.attack.value = 0.003; // Fast attack
-      compressor.release.value = 0.25; // Moderate release
+      compressor.threshold.value = -20; // Lower threshold to start engaging earlier but softer
+      compressor.knee.value = 30; // Soft knee
+      compressor.ratio.value = 3; // Reduced ratio (was 12) for gentle compression
+      compressor.attack.value = 0.003; 
+      compressor.release.value = 0.25;
 
       const outputAnalyser = outputCtx.createAnalyser();
       outputAnalyser.fftSize = 256;
@@ -236,7 +241,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       outputAnalyserRef.current = outputAnalyser;
 
       const gainNode = outputCtx.createGain();
-      // Apply initial volume boost (3x)
+      // Apply initial volume boost (Modified to 1.5x)
       gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
       
       // Connect Graph
@@ -248,7 +253,15 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       // --- INPUT SETUP ---
       console.log('[GeminiLive] Requesting Mic Access...');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request explicit echo cancellation and noise suppression
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1
+          } 
+      });
       console.log('[GeminiLive] Mic Access Granted');
       streamRef.current = stream;
 
@@ -295,8 +308,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       const ai = new GoogleGenAI({ apiKey: currentKey });
 
-      const currentPersona = personaRef.current;
-      
       let tools = [];
       if (currentPersona.id === 'thabo') {
           tools = [{ googleSearch: {} }];
@@ -320,11 +331,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             setStatus('connected');
             lastUserSpeechTimeRef.current = Date.now();
 
-            // --- DEMO LIMIT TIMER (120 Seconds) ---
+            // --- DEMO LIMIT TIMER (Dynamic Duration) ---
             demoTimerRef.current = window.setInterval(() => {
                 setTimeLeft(prev => {
                     if (prev <= 1) {
-                         console.log('[GeminiLive] Demo time limit reached (120s).');
+                         console.log('[GeminiLive] Demo time limit reached.');
                          disconnect("Demo time limit reached. Please reload or contact sales.");
                          return 0;
                     }
@@ -419,8 +430,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                         // Determine strictness based on whether language ACTUALLY changed
                         const isSameLanguage = lang === detectedLanguageRef.current;
                         const responseContent = isSameLanguage
-                            ? `[SYSTEM: Language is confirmed as ${lang}. Continue responding naturally.]`
-                            : `[SYSTEM: LANGUAGE CHANGE DETECTED: ${lang}]. SWITCH IMMEDIATELY. ADOPT AUTHENTIC ${lang} ACCENT & GRAMMAR.`;
+                            ? `[SYSTEM: MAINTAIN ${lang}. Ensure accent is PURE South African. NO American/Indian intonation.]`
+                            : `[SYSTEM: SWITCH to ${lang} immediately. ACKNOWLEDGE switch. SPEAK ONLY ${lang}. ACCENT must be authentic South African. NO American/Indian accents.]`;
 
                         sessionPromise.then(session => {
                             session.sendToolResponse({
