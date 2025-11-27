@@ -1,16 +1,15 @@
-
 import React, { useState } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
 import AudioVisualizer from './AudioVisualizer';
 import { 
   MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play
+  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
 const getPersonaIcon = (iconKey: string, size: number = 24, className: string = "") => {
-  const props = { size, className };
+  const props = { size, className, strokeWidth: 1.5 }; // Premium thin stroke
   switch (iconKey) {
     case 'briefcase': return <Briefcase {...props} />;
     case 'zap': return <Zap {...props} />;
@@ -87,277 +86,274 @@ export const ChatWidget: React.FC = () => {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const formattedTime = `${minutes < 10 ? `0${minutes}` : minutes}:${seconds < 10 ? `0${seconds}` : seconds}`;
-  
-  const isTimeLow = timeLeft <= 10;
+  const isTimeLow = timeLeft <= 30;
 
-  // --- CONNECTED STATE (SOPHISTICATED VOICE MODAL) ---
+  // --- CONNECTED STATE (ULTRA PREMIUM VOICE MODAL) ---
   if (status === 'connected' && isOpen) {
       return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center animate-fade-in-up origin-bottom-right font-sans">
-             <div className="w-[22rem] h-[36rem] bg-[#09090b] rounded-[2.5rem] shadow-2xl overflow-hidden relative flex flex-col border border-white/10 ring-1 ring-black/50">
+             <div className="w-[24rem] h-[40rem] bg-[#050505] rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden relative flex flex-col border border-white/5 ring-1 ring-white/5">
                 
-                {/* SA Flag Gradient Line */}
-                <div className="absolute top-0 w-full h-1.5 z-30 flex">
-                    <div className="h-full w-1/4 bg-[#E03C31]"></div>
-                    <div className="h-full w-1/4 bg-[#FFB612]"></div>
-                    <div className="h-full w-1/4 bg-[#007749]"></div>
-                    <div className="h-full w-1/4 bg-[#001489]"></div>
-                </div>
+                {/* Background FX */}
+                <div className="absolute inset-0 bg-noise opacity-20 pointer-events-none z-0"></div>
+                <div className={`absolute top-0 inset-x-0 h-96 bg-gradient-to-b opacity-20 pointer-events-none blur-3xl ${selectedPersona.gender === 'Male' ? 'from-green-900 via-emerald-900' : 'from-yellow-900 via-orange-900'} to-transparent`}></div>
 
-                {/* Subtle Pattern Background */}
-                <div className="absolute inset-0 opacity-[0.03] pointer-events-none z-0"
-                     style={{
-                         backgroundImage: `radial-gradient(#ffffff 1px, transparent 1px)`,
-                         backgroundSize: '20px 20px'
-                     }}>
-                </div>
-                <div className={`absolute top-0 inset-x-0 h-80 bg-gradient-to-b opacity-20 pointer-events-none ${selectedPersona.gender === 'Male' ? 'from-green-900' : 'from-yellow-900'} to-transparent`}></div>
-
-                {/* Header */}
-                <div className="w-full pt-8 px-6 flex justify-between items-start z-20">
-                    <div>
-                        <div className="flex items-center space-x-2 mb-1">
-                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]"></span>
-                            <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">Live Uplink</span>
+                {/* HUD Header */}
+                <div className="w-full pt-8 px-8 flex justify-between items-start z-20">
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                            </span>
+                            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/50">Live Uplink</span>
                         </div>
-                        {/* Countdown Timer Display */}
-                         <div className={`flex items-center space-x-1.5 mt-1 ${isTimeLow ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
-                            <Clock size={10} />
-                            <span className="text-xs font-mono font-bold">{formattedTime}</span>
+                         <div className={`flex items-center gap-2 ${isTimeLow ? 'text-red-500 animate-pulse' : 'text-white/80'}`}>
+                            <Clock size={12} strokeWidth={2} />
+                            <span className="text-sm font-mono font-medium tracking-wide">{formattedTime}</span>
                         </div>
                     </div>
                     <button 
                         onClick={toggleWidget} 
-                        className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition backdrop-blur-md"
+                        className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition backdrop-blur-md border border-white/5"
                     >
-                        <X size={18} />
+                        <X size={18} strokeWidth={1.5} />
                     </button>
                 </div>
 
                 {/* Main Visual Content */}
-                <div className="flex-1 flex flex-col items-center justify-center relative z-10 -mt-6">
+                <div className="flex-1 flex flex-col items-center justify-center relative z-10 -mt-10">
                     
                     {/* Integrated Visualizer & Avatar */}
-                    <div className="relative w-64 h-64 flex items-center justify-center">
+                    <div className="relative w-80 h-80 flex items-center justify-center">
                         {/* The Visualizer Ring */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-60 scale-125 pointer-events-none">
+                        <div className="absolute inset-0 flex items-center justify-center opacity-80 scale-110 pointer-events-none">
                             <AudioVisualizer 
                                 isActive={!isMicMuted} 
                                 volume={volume} 
                                 mode="circle"
-                                color={selectedPersona.gender === 'Male' ? '#22c55e' : '#eab308'} 
+                                color={selectedPersona.gender === 'Male' ? '#10b981' : '#f59e0b'} 
                             />
                         </div>
                         
-                        {/* The Avatar - Pulses/Vibrates with volume */}
+                        {/* The Avatar */}
                         <div 
-                            className="relative z-10 w-32 h-32 rounded-full bg-gradient-to-br from-gray-800 to-gray-950 border border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.6)] flex items-center justify-center p-1 transition-transform duration-75 ease-out"
+                            className="relative z-10 w-28 h-28 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 shadow-2xl flex items-center justify-center p-1 transition-transform duration-75 ease-out"
                             style={{ 
-                                transform: `scale(${1 + (volume * 0.4)})` // Vibration Effect
+                                transform: `scale(${1 + (volume * 0.15)})`
                             }}
                         >
-                             <div className="w-full h-full rounded-full bg-[#0c0c0c] flex items-center justify-center overflow-hidden relative">
-                                 {/* Inner Glow */}
-                                 <div className={`absolute inset-0 opacity-20 ${selectedPersona.gender === 'Male' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                                 {getPersonaIcon(selectedPersona.icon, 52, selectedPersona.gender === 'Male' ? "text-green-400" : "text-yellow-400")}
+                             <div className="w-full h-full rounded-full bg-gradient-to-b from-white/5 to-black flex items-center justify-center relative overflow-hidden">
+                                 <div className={`absolute inset-0 opacity-20 ${selectedPersona.gender === 'Male' ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                 {getPersonaIcon(selectedPersona.icon, 48, selectedPersona.gender === 'Male' ? "text-emerald-200" : "text-amber-200")}
                              </div>
                         </div>
                     </div>
 
-                    {/* Info */}
-                    <div className="text-center mt-2 space-y-1 z-20">
-                        <h3 className="text-3xl font-bold text-white tracking-tight drop-shadow-lg">{selectedPersona.name}</h3>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{selectedPersona.role}</p>
+                    {/* Persona Info */}
+                    <div className="text-center space-y-2 z-20">
+                        <h3 className="text-3xl font-bold text-white tracking-tight drop-shadow-2xl">{selectedPersona.name}</h3>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm">
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">{selectedPersona.role}</span>
+                        </div>
                         
-                        <div className="mt-4 inline-flex items-center px-4 py-1.5 rounded-full bg-white/5 border border-white/5 backdrop-blur-md shadow-lg">
-                            <Activity size={12} className={`mr-2 ${selectedPersona.gender === 'Male' ? 'text-green-500' : 'text-yellow-500'}`} />
-                            <p className="text-xs text-gray-300">
-                                Language: <span className="text-white font-semibold">{detectedLanguage}</span>
+                        <div className="mt-4 flex items-center justify-center gap-2">
+                             <span className="w-1 h-1 rounded-full bg-white/30"></span>
+                             <p className="text-xs text-white/40 tracking-wide">
+                                Detect: <span className="text-white font-medium">{detectedLanguage}</span>
                             </p>
+                             <span className="w-1 h-1 rounded-full bg-white/30"></span>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer Controls */}
-                <div className="w-full p-6 z-20 pb-8">
-                     <div className="w-full p-2 rounded-[2rem] bg-white/5 border border-white/5 backdrop-blur-xl flex items-center justify-between shadow-2xl relative overflow-hidden">
-                         {/* Shine effect */}
-                         <div className="absolute top-0 left-0 w-full h-1/2 bg-white/5 pointer-events-none"></div>
+                {/* Glass Control Bar */}
+                <div className="w-full p-6 z-30 pb-10">
+                     <div className="w-full p-2.5 rounded-[2rem] glass-dark flex items-center justify-between shadow-2xl relative overflow-hidden group">
+                         {/* Ambient Glow */}
+                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 pointer-events-none"></div>
 
                          <button 
                             onClick={toggleMic}
-                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
+                            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
                                 isMicMuted 
-                                ? 'bg-red-500/20 text-red-500 ring-1 ring-red-500/50' 
-                                : 'hover:bg-white/10 text-gray-400 hover:text-white'
+                                ? 'bg-red-500/10 text-red-500 ring-1 ring-red-500/30' 
+                                : 'hover:bg-white/10 text-white/60 hover:text-white'
                             }`}
                          >
-                             {isMicMuted ? <MicOff size={22} /> : <Mic size={22} />}
+                             {isMicMuted ? <MicOff size={24} strokeWidth={1.5} /> : <Mic size={24} strokeWidth={1.5} />}
                          </button>
 
                          <button 
                             onClick={disconnect}
-                            className="flex-1 mx-3 h-14 rounded-[1.6rem] bg-gradient-to-r from-red-700 to-red-600 hover:from-red-600 hover:to-red-500 text-white font-bold tracking-wide text-sm flex items-center justify-center shadow-lg shadow-red-900/40 transition-all active:scale-[0.98] group relative overflow-hidden"
+                            className="flex-1 mx-3 h-16 rounded-[1.8rem] bg-[#E11D48] hover:bg-[#be123c] text-white font-bold tracking-wide text-sm flex items-center justify-center shadow-[0_8px_20px_rgba(225,29,72,0.3)] hover:shadow-[0_8px_25px_rgba(225,29,72,0.5)] transition-all active:scale-[0.98]"
                          >
-                             <span className="relative z-10 flex items-center">
-                                <LogOut size={18} className="mr-2" />
-                                End Session
+                             <span className="flex items-center gap-2">
+                                <LogOut size={18} strokeWidth={2} />
+                                END SESSION
                              </span>
                          </button>
 
                          <button 
                             onClick={toggleMute}
-                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
+                            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
                                 isMuted 
-                                ? 'bg-yellow-500/20 text-yellow-500 ring-1 ring-yellow-500/50' 
-                                : 'hover:bg-white/10 text-gray-400 hover:text-white'
+                                ? 'bg-yellow-500/10 text-yellow-500 ring-1 ring-yellow-500/30' 
+                                : 'hover:bg-white/10 text-white/60 hover:text-white'
                             }`}
                          >
-                             {isMuted ? <VolumeX size={22} /> : <Volume2 size={22} />}
+                             {isMuted ? <VolumeX size={24} strokeWidth={1.5} /> : <Volume2 size={24} strokeWidth={1.5} />}
                          </button>
                      </div>
                 </div>
-
              </div>
         </div>
       );
   }
 
-  // --- STANDARD SELECTION STATE ---
+  // --- STANDARD SELECTION STATE (PREMIUM DOSSIER) ---
   return (
     <div className="fixed bottom-6 right-6 z-50 font-sans">
       {isOpen && status !== 'connected' && (
-        <div className="mb-4 w-[22rem] sm:w-[26rem] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col transition-all duration-300 ease-in-out transform origin-bottom-right max-h-[85vh]">
+        <div className="mb-6 w-[24rem] bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-gray-100 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.2,1,0.3,1)] transform origin-bottom-right max-h-[80vh]">
           
-          <div className="relative bg-gray-900 p-6 flex justify-between items-start shrink-0">
-             {/* SA Flag Gradient Line */}
-             <div className="absolute top-0 left-0 w-full h-1 flex">
-                <div className="h-full w-1/4 bg-[#E03C31]"></div>
-                <div className="h-full w-1/4 bg-[#FFB612]"></div>
-                <div className="h-full w-1/4 bg-[#007749]"></div>
-                <div className="h-full w-1/4 bg-[#001489]"></div>
-            </div>
+          {/* Header */}
+          <div className="relative bg-[#050505] p-6 pb-8 shrink-0">
+             {/* Gradient Accent */}
+             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"></div>
+             
+             {/* Background Pattern */}
+             <div className="absolute inset-0 bg-noise opacity-10"></div>
             
-            <div className="relative z-10">
-                <div className="flex items-center space-x-2 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    <h3 className="font-bold text-white text-lg tracking-tight">VCB-AI Neural Link</h3>
+            <div className="relative z-10 flex justify-between items-start">
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-gray-400">System Online</span>
+                    </div>
+                    <h3 className="font-bold text-white text-xl tracking-tight leading-none">Choose Your Agent</h3>
+                    <p className="text-xs text-gray-500 mt-2 font-medium">Specialized AI personas for every context.</p>
                 </div>
-                <p className="text-xs text-gray-400 font-medium">Select a specialist for your needs</p>
+                <button onClick={toggleWidget} className="hover:bg-white/10 p-2 rounded-full transition text-gray-500 hover:text-white">
+                  <X size={20} strokeWidth={1.5} />
+                </button>
             </div>
-            
-            <button onClick={toggleWidget} className="hover:bg-white/10 p-2 rounded-full transition text-gray-400 hover:text-white">
-              <X size={18} />
-            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-gray-50/50 custom-scrollbar p-4">
+          {/* List Area */}
+          <div className="flex-1 overflow-y-auto bg-gray-50/80 custom-scrollbar p-3 -mt-4 rounded-t-[1.5rem] relative z-20">
                 
                 {status === 'connecting' && (
-                     <div className="flex flex-col items-center justify-center py-12">
-                        <div className="relative w-12 h-12 mb-4">
-                            <div className="absolute inset-0 rounded-full border-4 border-gray-200"></div>
-                            <div className="absolute inset-0 rounded-full border-4 border-t-yellow-500 animate-spin"></div>
+                     <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <div className="relative w-16 h-16">
+                            <div className="absolute inset-0 rounded-full border-[3px] border-gray-100"></div>
+                            <div className="absolute inset-0 rounded-full border-[3px] border-t-black animate-spin"></div>
                         </div>
-                        <span className="text-sm font-bold text-gray-700">Establishing Uplink...</span>
+                        <span className="text-sm font-bold text-gray-900 tracking-wide animate-pulse">Establishing Uplink...</span>
                      </div>
                 )}
 
                 {status === 'error' && (
-                    <div className="mb-4 p-4 bg-red-50 rounded-2xl border border-red-100 flex flex-col items-center text-center">
-                        <p className="text-sm text-red-600 font-medium mb-2">{error || "Connection failed."}</p>
-                        <button onClick={() => connect()} className="text-xs px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200 transition">Retry Connection</button>
+                    <div className="m-2 p-6 bg-red-50 rounded-2xl border border-red-100 flex flex-col items-center text-center">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mb-3">
+                            <LogOut size={18} className="text-red-500" />
+                        </div>
+                        <p className="text-sm text-red-900 font-bold mb-1">Connection Failed</p>
+                        <p className="text-xs text-red-600 mb-4 px-4">{error || "The server could not be reached."}</p>
+                        <button onClick={() => connect()} className="text-xs font-bold px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-lg shadow-red-200">Try Again</button>
                     </div>
                 )}
 
                 {status !== 'connecting' && (
-                    <div className="space-y-4">
-                        {PERSONAS.map(persona => (
+                    <div className="space-y-3 pb-20">
+                        {PERSONAS.map(persona => {
+                            const isSelected = selectedPersonaId === persona.id;
+                            const isPlaying = playingPreview === persona.id;
+
+                            return (
                             <button
                                 key={persona.id}
                                 onClick={() => handlePersonaSelect(persona.id)}
-                                className={`w-full group relative p-5 rounded-3xl border text-left transition-all duration-300 flex flex-col space-y-3
-                                    ${selectedPersonaId === persona.id 
-                                        ? 'bg-white border-yellow-400 shadow-xl shadow-yellow-100 ring-1 ring-yellow-400/20' 
-                                        : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-lg'
+                                className={`w-full group relative p-4 rounded-[1.5rem] text-left transition-all duration-300 border-2
+                                    ${isSelected 
+                                        ? 'bg-white border-black shadow-xl scale-[1.02] z-10' 
+                                        : 'bg-white border-transparent hover:border-gray-200 hover:shadow-lg scale-100'
                                     }
                                 `}
                             >
-                                <div className="flex items-start space-x-4">
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300
-                                        ${selectedPersonaId === persona.id 
-                                            ? 'bg-yellow-50 text-yellow-600 scale-105' 
-                                            : 'bg-gray-50 text-gray-500 group-hover:bg-gray-100 group-hover:text-gray-900'
+                                <div className="flex items-start gap-4">
+                                    {/* Icon Box */}
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500
+                                        ${isSelected 
+                                            ? 'bg-black text-white shadow-lg' 
+                                            : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100 group-hover:text-gray-900'
                                         }
                                     `}>
-                                        {getPersonaIcon(persona.icon, 28)}
+                                        {getPersonaIcon(persona.icon, 24)}
                                     </div>
                                     
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-center mb-0.5">
-                                            <span className={`font-bold text-base ${selectedPersonaId === persona.id ? 'text-gray-900' : 'text-gray-700'}`}>
-                                                {persona.name}
-                                            </span>
-                                            {selectedPersonaId === persona.id ? (
-                                                <div className="bg-yellow-100 text-yellow-700 p-1 rounded-full">
-                                                    <Check size={14} strokeWidth={3} />
+                                    <div className="flex-1 min-w-0 pt-0.5">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h4 className={`font-bold text-base leading-none mb-1 ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                                                    {persona.name}
+                                                </h4>
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">{persona.role}</span>
+                                            </div>
+                                            
+                                            {/* Action Button (Check or Preview) */}
+                                            {isSelected ? (
+                                                <div className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center shadow-lg transform transition-transform animate-in zoom-in">
+                                                    <Check size={12} strokeWidth={3} />
                                                 </div>
                                             ) : (
-                                                // Preview Button
                                                 <div 
                                                     role="button"
                                                     onClick={(e) => playPreview(persona.id, persona.gender, e)}
-                                                    className="p-1.5 rounded-full bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                    title="Hear Voice Preview"
+                                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all
+                                                        ${isPlaying ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-900'}
+                                                    `}
                                                 >
-                                                    {playingPreview === persona.id ? <Activity size={14} className="animate-pulse" /> : <Play size={14} fill="currentColor" />}
+                                                    {isPlaying ? <BarChart2 size={14} className="animate-pulse" /> : <Play size={14} fill="currentColor" />}
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 mb-2">{persona.role}</div>
                                         
-                                        {/* Voice Description Badge */}
-                                        <div className="flex items-center space-x-2 mb-2">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                                                <Volume2 size={10} className="mr-1" />
+                                        <p className="text-xs text-gray-500 leading-relaxed mt-2 line-clamp-2">{persona.description}</p>
+                                        
+                                        {/* Tags */}
+                                        <div className="flex flex-wrap gap-1.5 mt-3">
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600">
+                                                <Volume2 size={8} className="mr-1" />
                                                 {persona.voiceDescription}
                                             </span>
+                                            {persona.capabilities.slice(0, 2).map((cap, idx) => (
+                                                <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded font-medium border border-gray-100 text-gray-400 bg-white">
+                                                    {cap}
+                                                </span>
+                                            ))}
                                         </div>
-
-                                        <p className="text-xs text-gray-500 leading-relaxed mb-3">{persona.description}</p>
                                     </div>
                                 </div>
-
-                                {/* Capabilities Tags */}
-                                <div className="flex flex-wrap gap-1.5 pl-[4.5rem]">
-                                    {persona.capabilities.map((cap, idx) => (
-                                        <span key={idx} className={`text-[10px] px-2 py-1 rounded-md font-medium border
-                                             ${selectedPersonaId === persona.id
-                                                ? 'bg-yellow-50 border-yellow-100 text-yellow-700'
-                                                : 'bg-gray-50 border-gray-100 text-gray-500'
-                                             }
-                                        `}>
-                                            {cap}
-                                        </span>
-                                    ))}
-                                </div>
                             </button>
-                        ))}
+                        )})}
                     </div>
                 )}
           </div>
 
+          {/* Connect Button Footer */}
           {status !== 'connecting' && (
-              <div className="p-5 bg-white border-t border-gray-100">
+              <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent z-30 pt-10">
                   <button
                       onClick={connect}
-                      className="w-full py-4 rounded-2xl font-bold text-white shadow-xl shadow-green-900/10 bg-[#09090b] hover:bg-black transition-all transform active:scale-[0.98] flex items-center justify-center space-x-3 group relative overflow-hidden"
+                      className="w-full py-4 rounded-2xl font-bold text-white shadow-[0_10px_30px_rgba(0,0,0,0.2)] bg-black hover:bg-gray-900 transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-3 group overflow-hidden relative"
                   >
-                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                      <div className="p-1.5 bg-white/20 rounded-full">
-                        <Mic size={18} className="text-white" />
-                      </div>
-                      <span className="text-lg">Start Session</span>
+                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+                      <Mic size={20} className="text-white/80" />
+                      <span className="text-base tracking-wide">INITIALIZE SESSION</span>
                       <ChevronRight size={18} className="opacity-50 group-hover:translate-x-1 transition-transform" />
                   </button>
               </div>
@@ -365,24 +361,28 @@ export const ChatWidget: React.FC = () => {
         </div>
       )}
 
+      {/* Floating Action Button (Closed State) */}
       {!isOpen && (
         <div className="relative group">
-            {/* Live DEMO Label */}
-            <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-white text-gray-900 font-bold text-xs px-3 py-1.5 rounded-lg shadow-lg border border-gray-100 flex items-center whitespace-nowrap">
+            <div className="absolute right-full mr-6 top-1/2 -translate-y-1/2 bg-black text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xl flex items-center whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0 pointer-events-none">
                 <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-                Live DEMO
-                {/* Arrow */}
-                <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-white transform rotate-45 border-r border-t border-gray-100"></div>
+                Start Live Demo
             </div>
 
             <button
                 onClick={toggleWidget}
-                className="w-16 h-16 bg-black text-white rounded-[20px] shadow-2xl flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-110 hover:-rotate-3 active:scale-95 group relative overflow-hidden ring-4 ring-white"
+                className="w-16 h-16 bg-black text-white rounded-[1.5rem] shadow-[0_15px_40px_rgba(0,0,0,0.3)] flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-105 active:scale-95 group relative overflow-hidden ring-4 ring-white"
             >
-                <div className="absolute inset-0 bg-gradient-to-tr from-green-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <MessageCircle size={30} strokeWidth={1.5} className="relative z-10 group-hover:scale-110 transition-transform" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 
-                <div className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-2 border-black animate-pulse"></div>
+                {/* Icon Animation */}
+                <div className="relative">
+                     <MessageCircle size={30} strokeWidth={1.5} className="transition-transform group-hover:-translate-y-1" />
+                     <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-white/20 rounded-full blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+                
+                {/* Notification Dot */}
+                <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black animate-pulse"></div>
             </button>
         </div>
       )}
