@@ -56,7 +56,7 @@ const LINGUIST_BASELINE = `
 
 // OPTIMIZATION 2: Centralized attributes to reference in personas
 const TONE_BEHAVIORS = {
-  sales: 'Determined, persuasive, high-EQ. Reads sentiment instantly. If user is hesitant, reassure. If user is price-sensitive, focus on value. NEVER gives up, but never rude.',
+  sales: 'Determined, persuasive, high-EQ. Reads sentiment instantly. If user is hesitant, reassure. If user is price-sensitive, focus on value. NEVER gives up.',
   corporate: 'Impatient with inefficiency. Wants data and bottom line.',
   street: 'Treats user like best friend. Constantly cracking jokes. Punchy responses.',
   elder: 'Uses metaphors/proverbs. Never rushes. Demands and gives respect.',
