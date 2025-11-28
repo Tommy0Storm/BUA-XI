@@ -5,7 +5,8 @@ import { PERSONAS } from '../constants';
 import AudioVisualizer from './AudioVisualizer';
 import { 
   MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2
+  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2,
+  Loader2, AlertCircle, RefreshCw
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
@@ -247,117 +248,124 @@ export const ChatWidget: React.FC = () => {
           {/* List Area */}
           <div className="flex-1 overflow-y-auto bg-gray-50/80 custom-scrollbar p-3 -mt-4 rounded-t-[1.5rem] relative z-20">
                 
-                {status === 'connecting' && (
-                     <div className="flex flex-col items-center justify-center py-20 gap-4">
-                        <div className="relative w-16 h-16">
-                            <div className="absolute inset-0 rounded-full border-[3px] border-gray-100"></div>
-                            <div className="absolute inset-0 rounded-full border-[3px] border-t-black animate-spin"></div>
-                        </div>
-                        <span className="text-sm font-bold text-gray-900 tracking-wide animate-pulse">Establishing Uplink...</span>
-                     </div>
-                )}
-
                 {status === 'error' && (
-                    <div className="m-2 p-6 bg-red-50 rounded-2xl border border-red-100 flex flex-col items-center text-center">
-                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mb-3">
-                            <LogOut size={18} className="text-red-500" />
+                    <div className="absolute inset-0 z-30 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-300 rounded-[1.5rem]">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 shadow-sm border border-red-100">
+                            <AlertCircle size={32} className="text-red-500" strokeWidth={1.5} />
                         </div>
-                        <p className="text-sm text-red-900 font-bold mb-1">Connection Failed</p>
-                        <p className="text-xs text-red-600 mb-4 px-4">{error || "The server could not be reached."}</p>
-                        <button onClick={() => connect()} className="text-xs font-bold px-6 py-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition shadow-lg shadow-red-200">Try Again</button>
+                        <h4 className="text-lg font-bold text-gray-900 mb-2">Connection Failed</h4>
+                        <p className="text-sm text-gray-500 mb-6 max-w-[240px] leading-relaxed">{error || "Unable to establish a secure link to the neural core."}</p>
+                        <button 
+                            onClick={() => connect()}
+                            className="px-6 py-3 bg-red-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-red-200 hover:bg-red-700 hover:shadow-red-300 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center gap-2"
+                        >
+                            <RefreshCw size={16} />
+                            Retry Connection
+                        </button>
                     </div>
                 )}
 
-                {status !== 'connecting' && (
-                    <div className="space-y-3 pb-20">
-                        {PERSONAS.map(persona => {
-                            const isSelected = selectedPersonaId === persona.id;
-                            const isPlaying = playingPreview === persona.id;
+                <div className={`space-y-3 pb-20 transition-all duration-300 ${status === 'connecting' || status === 'error' ? 'opacity-40 pointer-events-none grayscale-[0.5] blur-[1px]' : 'opacity-100'}`}>
+                    {PERSONAS.map(persona => {
+                        const isSelected = selectedPersonaId === persona.id;
+                        const isPlaying = playingPreview === persona.id;
 
-                            return (
-                            <button
-                                key={persona.id}
-                                onClick={() => handlePersonaSelect(persona.id)}
-                                className={`w-full group relative p-4 rounded-[1.5rem] text-left transition-all duration-300 border-2
+                        return (
+                        <button
+                            key={persona.id}
+                            onClick={() => handlePersonaSelect(persona.id)}
+                            className={`w-full group relative p-4 rounded-[1.5rem] text-left transition-all duration-300 border-2
+                                ${isSelected 
+                                    ? 'bg-white border-black shadow-xl scale-[1.02] z-10' 
+                                    : 'bg-white border-transparent hover:border-gray-200 hover:shadow-lg scale-100'
+                                }
+                            `}
+                        >
+                            <div className="flex items-start gap-4">
+                                {/* Icon Box */}
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500
                                     ${isSelected 
-                                        ? 'bg-white border-black shadow-xl scale-[1.02] z-10' 
-                                        : 'bg-white border-transparent hover:border-gray-200 hover:shadow-lg scale-100'
+                                        ? 'bg-black text-white shadow-lg' 
+                                        : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100 group-hover:text-gray-900'
                                     }
-                                `}
-                            >
-                                <div className="flex items-start gap-4">
-                                    {/* Icon Box */}
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500
-                                        ${isSelected 
-                                            ? 'bg-black text-white shadow-lg' 
-                                            : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100 group-hover:text-gray-900'
-                                        }
-                                    `}>
-                                        {getPersonaIcon(persona.icon, 24)}
+                                `}>
+                                    {getPersonaIcon(persona.icon, 24)}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0 pt-0.5">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className={`font-bold text-base leading-none mb-1 ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                                                {persona.name}
+                                            </h4>
+                                            <div className="flex gap-2 items-center">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">{persona.role}</span>
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black text-white font-bold">{persona.vibe}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Action Button (Check or Preview) */}
+                                        {isSelected ? (
+                                            <div className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center shadow-lg transform transition-transform animate-in zoom-in">
+                                                <Check size={12} strokeWidth={3} />
+                                            </div>
+                                        ) : (
+                                            <div 
+                                                role="button"
+                                                onClick={(e) => playPreview(persona.id, persona.gender, e)}
+                                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all
+                                                    ${isPlaying ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-900'}
+                                                `}
+                                            >
+                                                {isPlaying ? <BarChart2 size={14} className="animate-pulse" /> : <Play size={14} fill="currentColor" />}
+                                            </div>
+                                        )}
                                     </div>
                                     
-                                    <div className="flex-1 min-w-0 pt-0.5">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h4 className={`font-bold text-base leading-none mb-1 ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
-                                                    {persona.name}
-                                                </h4>
-                                                <div className="flex gap-2 items-center">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">{persona.role}</span>
-                                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black text-white font-bold">{persona.vibe}</span>
-                                                </div>
-                                            </div>
-                                            
-                                            {/* Action Button (Check or Preview) */}
-                                            {isSelected ? (
-                                                <div className="w-6 h-6 bg-black text-white rounded-full flex items-center justify-center shadow-lg transform transition-transform animate-in zoom-in">
-                                                    <Check size={12} strokeWidth={3} />
-                                                </div>
-                                            ) : (
-                                                <div 
-                                                    role="button"
-                                                    onClick={(e) => playPreview(persona.id, persona.gender, e)}
-                                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all
-                                                        ${isPlaying ? 'bg-green-100 text-green-600' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-900'}
-                                                    `}
-                                                >
-                                                    {isPlaying ? <BarChart2 size={14} className="animate-pulse" /> : <Play size={14} fill="currentColor" />}
-                                                </div>
-                                            )}
-                                        </div>
-                                        
-                                        <p className="text-xs text-gray-500 leading-relaxed mt-2 line-clamp-2">{persona.description}</p>
-                                        
-                                        {/* Tags */}
-                                        <div className="flex flex-wrap gap-1.5 mt-3">
-                                            {persona.capabilities.slice(0, 3).map((cap, idx) => (
-                                                <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded font-medium border border-gray-100 text-gray-400 bg-white">
-                                                    {cap}
-                                                </span>
-                                            ))}
-                                        </div>
+                                    <p className="text-xs text-gray-500 leading-relaxed mt-2 line-clamp-2">{persona.description}</p>
+                                    
+                                    {/* Tags */}
+                                    <div className="flex flex-wrap gap-1.5 mt-3">
+                                        {persona.capabilities.slice(0, 3).map((cap, idx) => (
+                                            <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded font-medium border border-gray-100 text-gray-400 bg-white">
+                                                {cap}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
-                            </button>
-                        )})}
-                    </div>
-                )}
+                            </div>
+                        </button>
+                    )})}
+                </div>
           </div>
 
           {/* Connect Button Footer */}
-          {status !== 'connecting' && (
-              <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent z-30 pt-10">
-                  <button
-                      onClick={connect}
-                      className="w-full py-4 rounded-2xl font-bold text-white shadow-[0_10px_30px_rgba(0,0,0,0.2)] bg-black hover:bg-gray-900 transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-3 group overflow-hidden relative"
-                  >
-                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
-                      <Mic size={20} className="text-white/80" />
-                      <span className="text-base tracking-wide">INITIALIZE SESSION</span>
-                      <ChevronRight size={18} className="opacity-50 group-hover:translate-x-1 transition-transform" />
-                  </button>
-              </div>
-          )}
+          <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent z-30 pt-10">
+              <button
+                  onClick={connect}
+                  disabled={status === 'connecting'}
+                  className={`w-full py-4 rounded-2xl font-bold text-white shadow-[0_10px_30px_rgba(0,0,0,0.2)] transition-all transform flex items-center justify-center gap-3 group overflow-hidden relative
+                      ${status === 'connecting' 
+                          ? 'bg-gray-800 cursor-not-allowed scale-[0.98]' 
+                          : 'bg-black hover:bg-gray-900 hover:-translate-y-1 active:scale-[0.98]'
+                      }
+                  `}
+              >
+                   {status === 'connecting' ? (
+                       <>
+                          <Loader2 size={20} className="text-white/80 animate-spin" />
+                          <span className="text-base tracking-wide text-white/80">ESTABLISHING UPLINK...</span>
+                       </>
+                   ) : (
+                       <>
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+                          <Mic size={20} className="text-white/80" />
+                          <span className="text-base tracking-wide">INITIALIZE SESSION</span>
+                          <ChevronRight size={18} className="opacity-50 group-hover:translate-x-1 transition-transform" />
+                       </>
+                   )}
+              </button>
+          </div>
         </div>
       )}
 
