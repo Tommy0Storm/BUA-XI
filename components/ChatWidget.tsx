@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
@@ -301,7 +302,10 @@ export const ChatWidget: React.FC = () => {
                                                 <h4 className={`font-bold text-base leading-none mb-1 ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
                                                     {persona.name}
                                                 </h4>
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">{persona.role}</span>
+                                                <div className="flex gap-2 items-center">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-green-600">{persona.role}</span>
+                                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black text-white font-bold">{persona.vibe}</span>
+                                                </div>
                                             </div>
                                             
                                             {/* Action Button (Check or Preview) */}
@@ -326,11 +330,7 @@ export const ChatWidget: React.FC = () => {
                                         
                                         {/* Tags */}
                                         <div className="flex flex-wrap gap-1.5 mt-3">
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 text-gray-600">
-                                                <Volume2 size={8} className="mr-1" />
-                                                {persona.voiceDescription}
-                                            </span>
-                                            {persona.capabilities.slice(0, 2).map((cap, idx) => (
+                                            {persona.capabilities.slice(0, 3).map((cap, idx) => (
                                                 <span key={idx} className="text-[9px] px-1.5 py-0.5 rounded font-medium border border-gray-100 text-gray-400 bg-white">
                                                     {cap}
                                                 </span>
