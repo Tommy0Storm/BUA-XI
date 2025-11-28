@@ -41,6 +41,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   // Analysers for Visualization
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  
+  // PERFORMANCE OPTIMIZATION: Reusable buffers to avoid GC pressure in render loop
+  const inputDataArrayRef = useRef<Uint8Array | null>(null);
+  const outputDataArrayRef = useRef<Uint8Array | null>(null);
+
   const volumeAnimationRef = useRef<number | null>(null);
 
   const nextStartTimeRef = useRef<number>(0);
@@ -243,6 +248,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       outputAnalyser.fftSize = 256;
       outputAnalyser.smoothingTimeConstant = 0.3; // Responsive
       outputAnalyserRef.current = outputAnalyser;
+      // Pre-allocate buffer
+      outputDataArrayRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
 
       const gainNode = outputCtx.createGain();
       // Apply initial volume boost (Modified to 1.5x)
@@ -273,16 +280,19 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       inputAnalyser.fftSize = 256;
       inputAnalyser.smoothingTimeConstant = 0.3; // Responsive
       inputAnalyserRef.current = inputAnalyser;
+      // Pre-allocate buffer
+      inputDataArrayRef.current = new Uint8Array(inputAnalyser.frequencyBinCount);
 
       // --- VISUALIZER LOOP ---
       const updateVolume = () => {
         let maxVol = 0;
 
         // 1. Get Input Volume (if mic not muted)
-        if (inputAnalyserRef.current && !isMicMutedRef.current) {
-            const data = new Uint8Array(inputAnalyserRef.current.frequencyBinCount);
+        if (inputAnalyserRef.current && !isMicMutedRef.current && inputDataArrayRef.current) {
+            const data = inputDataArrayRef.current;
             inputAnalyserRef.current.getByteTimeDomainData(data);
             let sum = 0;
+            // Loop through data manually to avoid creating intermediate arrays
             for(let i=0; i<data.length; i++) {
                 const v = (data[i] - 128) / 128;
                 sum += v*v;
@@ -291,8 +301,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         }
 
         // 2. Get Output Volume (Bot speaking)
-        if (outputAnalyserRef.current) {
-             const data = new Uint8Array(outputAnalyserRef.current.frequencyBinCount);
+        if (outputAnalyserRef.current && outputDataArrayRef.current) {
+             const data = outputDataArrayRef.current;
              outputAnalyserRef.current.getByteTimeDomainData(data);
              let sum = 0;
              for(let i=0; i<data.length; i++) {
