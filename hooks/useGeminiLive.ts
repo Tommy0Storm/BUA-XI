@@ -290,7 +290,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         // 1. Get Input Volume (if mic not muted)
         if (inputAnalyserRef.current && !isMicMutedRef.current && inputDataArrayRef.current) {
             const data = inputDataArrayRef.current;
-            inputAnalyserRef.current.getByteTimeDomainData(data);
+            inputAnalyserRef.current.getByteTimeDomainData(data as any);
             let sum = 0;
             // Loop through data manually to avoid creating intermediate arrays
             for(let i=0; i<data.length; i++) {
@@ -303,7 +303,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         // 2. Get Output Volume (Bot speaking)
         if (outputAnalyserRef.current && outputDataArrayRef.current) {
              const data = outputDataArrayRef.current;
-             outputAnalyserRef.current.getByteTimeDomainData(data);
+             outputAnalyserRef.current.getByteTimeDomainData(data as any);
              let sum = 0;
              for(let i=0; i<data.length; i++) {
                  const v = (data[i] - 128) / 128;
