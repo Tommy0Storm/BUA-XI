@@ -9,18 +9,16 @@ export interface UseGeminiLiveProps {
   persona: Persona;
 }
 
-const VOLUME_GAIN = 1.5; // Reduced from 3.0 to 1.5 to prevent compressor pumping
+const VOLUME_GAIN = 1.5;
 
 export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [volume, setVolume] = useState(0); // For visualizer (Input OR Output)
+  const [volume, setVolume] = useState(0);
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isMicMuted, setIsMicMuted] = useState(false);
-  
-  // Timer State - Defaults to 120, but updated on connect
   const [timeLeft, setTimeLeft] = useState(120);
 
   // API Key Management
@@ -29,7 +27,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   [apiKey]);
   const currentKeyIndexRef = useRef(0);
 
-  // Refs for audio management to avoid re-renders
+  // Refs for audio management
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,40 +35,35 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const inputGainRef = useRef<GainNode | null>(null); 
-  
-  // Analysers for Visualization
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
   
-  // PERFORMANCE OPTIMIZATION: Reusable buffers to avoid GC pressure in render loop
+  // Reusable buffers
   const inputDataArrayRef = useRef<Uint8Array | null>(null);
   const outputDataArrayRef = useRef<Uint8Array | null>(null);
-
   const volumeAnimationRef = useRef<number | null>(null);
 
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<Promise<any> | null>(null);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   
-  // Interruption Handling: "Epoch" tracks the current conversational turn.
-  // Incrementing this invalidates any pending audio chunks from previous turns.
   const interruptionEpochRef = useRef<number>(0);
-  
-  // Demo Limit Refs
   const demoTimerRef = useRef<number | null>(null);
-  
-  // Refs for props that might change during connection
   const personaRef = useRef<Persona>(persona);
   const isMutedRef = useRef(isMuted);
   const isMicMutedRef = useRef(isMicMuted);
-  const detectedLanguageRef = useRef(detectedLanguage); // Ref to track language without re-renders
-
-  // Silence Detection Refs
+  const detectedLanguageRef = useRef(detectedLanguage);
+  
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
   const silenceCheckIntervalRef = useRef<number | null>(null);
   
-  // CRITICAL: Gatekeeper flag to prevent audio processing after stop/close
+  // --- STATE CONTROL REFS ---
+  // 1. shouldProcessAudio: Master switch for the audio loop
   const shouldProcessAudioRef = useRef<boolean>(false);
+  // 2. isIntentionalDisconnect: Distinguishes between user hitting "End" vs network failure
+  const isIntentionalDisconnectRef = useRef<boolean>(false);
+  // 3. statusRef: Allows callbacks to know current React state without staleness
+  const statusRef = useRef<ConnectionStatus>('disconnected');
 
   useEffect(() => {
     personaRef.current = persona;
@@ -80,13 +73,15 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     detectedLanguageRef.current = detectedLanguage;
   }, [detectedLanguage]);
 
-  // Handle mute toggling on active audio context
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   useEffect(() => {
     isMutedRef.current = isMuted;
     if (gainNodeRef.current && gainNodeRef.current.context) {
         const ctx = gainNodeRef.current.context;
         const currentTime = ctx.currentTime;
-        // Use setTargetAtTime for smooth volume transitions (prevents clicks)
         gainNodeRef.current.gain.setTargetAtTime(isMuted ? 0 : VOLUME_GAIN, currentTime, 0.05);
     }
   }, [isMuted]);
@@ -104,91 +99,65 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   }, []);
 
   const stopAudio = useCallback(() => {
-    console.log('[BuaX1] Stopping Audio...');
-    shouldProcessAudioRef.current = false; // IMMEDIATE: Stop all audio processing loops
+    console.log('[BuaX1] Stopping Audio Subsystems...');
+    shouldProcessAudioRef.current = false; 
     
-    // Clear demo timer
+    // Kill the processor loop immediately
+    if (processorRef.current) {
+        processorRef.current.onaudioprocess = null;
+        try { processorRef.current.disconnect(); } catch(e) {}
+        processorRef.current = null;
+    }
+
     if (demoTimerRef.current) {
         window.clearInterval(demoTimerRef.current);
         demoTimerRef.current = null;
     }
 
-    // Cancel volume animation
     if (volumeAnimationRef.current) {
         cancelAnimationFrame(volumeAnimationRef.current);
         volumeAnimationRef.current = null;
     }
 
-    // Clear silence interval
     if (silenceCheckIntervalRef.current) {
         window.clearInterval(silenceCheckIntervalRef.current);
         silenceCheckIntervalRef.current = null;
     }
 
     if (inputContextRef.current) {
-      try {
-        inputContextRef.current.close();
-      } catch(e) { /* ignore already closed */ }
+      try { inputContextRef.current.close(); } catch(e) {}
       inputContextRef.current = null;
     }
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    if (processorRef.current) {
-      try {
-        processorRef.current.disconnect();
-      } catch(e) {}
-      processorRef.current = null;
-    }
+    
     if (sourceRef.current) {
-      try {
-        sourceRef.current.disconnect();
-      } catch(e) {}
+      try { sourceRef.current.disconnect(); } catch(e) {}
       sourceRef.current = null;
     }
-    if (gainNodeRef.current) {
-        try {
-            gainNodeRef.current.disconnect();
-        } catch(e) {}
-        gainNodeRef.current = null;
-    }
-    if (inputGainRef.current) {
-        try {
-            inputGainRef.current.disconnect();
-        } catch(e) {}
-        inputGainRef.current = null;
-    }
-    if (inputAnalyserRef.current) {
-        try {
-            inputAnalyserRef.current.disconnect();
-        } catch(e) {}
-        inputAnalyserRef.current = null;
-    }
-    if (outputAnalyserRef.current) {
-        try {
-            outputAnalyserRef.current.disconnect();
-        } catch(e) {}
-        outputAnalyserRef.current = null;
-    }
+    
+    // Disconnect Nodes
+    [gainNodeRef, inputGainRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
+        if (ref.current) {
+            try { ref.current.disconnect(); } catch(e) {}
+            ref.current = null;
+        }
+    });
 
-    // Stop output audio
     activeSourcesRef.current.forEach(source => {
-      try {
-        source.stop();
-        source.disconnect();
-      } catch (e) { /* ignore */ }
+      try { source.stop(); source.disconnect(); } catch (e) {}
     });
     activeSourcesRef.current.clear();
     
     if (audioContextRef.current) {
-        try {
-            audioContextRef.current.close();
-        } catch(e) { /* ignore */ }
+        try { audioContextRef.current.close(); } catch(e) {}
         audioContextRef.current = null;
     }
+    
     setVolume(0);
-    setTranscript('');
     console.log('[BuaX1] Audio Stopped.');
   }, []);
 
@@ -200,101 +169,90 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   }, [stopAudio]);
 
   const disconnect = useCallback(async (errorMessage?: string) => {
-    console.log('[BuaX1] Disconnecting session...');
+    console.log('[BuaX1] Disconnecting session (Intentional)...');
+    isIntentionalDisconnectRef.current = true;
     shouldProcessAudioRef.current = false;
 
     if (sessionRef.current) {
         try {
             const session = await sessionRef.current;
             session.close();
-            console.log('[BuaX1] Session closed successfully.');
         } catch (e) {
-            console.error('[BuaX1] Error closing session:', e);
+            console.warn('[BuaX1] Error closing session:', e);
         }
     }
     sessionRef.current = null;
+    
     setStatus('disconnected');
     setDetectedLanguage('Auto-Detect');
     setTranscript('');
+    
     if (errorMessage) {
         setError(errorMessage);
+        setStatus('error');
     }
+    
     stopAudio();
   }, [stopAudio]);
 
   const connect = useCallback(async () => {
     if (apiKeys.length === 0) {
-      console.error('[BuaX1] API Key Missing');
       setError('API Key is missing.');
+      setStatus('error');
       return;
     }
 
-    // Use the current key index to select the key
     const currentKey = apiKeys[currentKeyIndexRef.current];
     console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current}`);
 
     try {
-      console.log('[BuaX1] Starting Connection...');
       setStatus('connecting');
       setError(null);
       setDetectedLanguage('Auto-Detect');
       setTranscript('');
       
       const currentPersona = personaRef.current;
+      setTimeLeft(currentPersona.maxDurationSeconds || 120);
       
-      // SET TIME LIMIT BASED ON PERSONA (Default 120s, or override)
-      const timeLimit = currentPersona.maxDurationSeconds || 120;
-      setTimeLeft(timeLimit);
-      
-      // Reset interruption tracking
+      // Reset State Flags
       interruptionEpochRef.current = 0;
-      shouldProcessAudioRef.current = true; // Enable audio processing
+      shouldProcessAudioRef.current = true;
+      isIntentionalDisconnectRef.current = false;
 
-      // Initialize Audio Contexts
+      // --- AUDIO SETUP ---
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      
       const inputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.inputSampleRate }); 
       const outputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.outputSampleRate });
       
-      await outputCtx.resume();
-      await inputCtx.resume();
+      await Promise.all([outputCtx.resume(), inputCtx.resume()]);
       
       audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
       nextStartTimeRef.current = outputCtx.currentTime;
 
-      // --- OUTPUT SETUP ---
-      // Graph: Source -> Gain (Boost) -> Compressor -> Analyser -> Destination
-      
-      // Dynamics Compressor: Modified to be smoother and less aggressive to prevent "pumping"
+      // 1. Output Pipeline
       const compressor = outputCtx.createDynamicsCompressor();
-      compressor.threshold.value = -20; // Lower threshold to start engaging earlier but softer
-      compressor.knee.value = 30; // Soft knee
-      compressor.ratio.value = 3; // Reduced ratio (was 12) for gentle compression
+      compressor.threshold.value = -20;
+      compressor.knee.value = 30;
+      compressor.ratio.value = 3;
       compressor.attack.value = 0.003; 
       compressor.release.value = 0.25;
 
       const outputAnalyser = outputCtx.createAnalyser();
       outputAnalyser.fftSize = 256;
-      outputAnalyser.smoothingTimeConstant = 0.3; // Responsive
+      outputAnalyser.smoothingTimeConstant = 0.3;
       outputAnalyserRef.current = outputAnalyser;
-      // Pre-allocate buffer
       outputDataArrayRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
 
       const gainNode = outputCtx.createGain();
-      // Apply initial volume boost (Modified to 1.5x)
       gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
       
-      // Connect Graph
       gainNode.connect(compressor);
       compressor.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
-      
       gainNodeRef.current = gainNode;
 
-      // --- INPUT SETUP ---
-      console.log('[BuaX1] Requesting Mic Access...');
-      // Request explicit echo cancellation and noise suppression
+      // 2. Input Pipeline
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
               echoCancellation: true,
@@ -303,28 +261,24 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               channelCount: 1
           } 
       });
-      console.log('[BuaX1] Mic Access Granted');
       streamRef.current = stream;
 
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
-      inputAnalyser.smoothingTimeConstant = 0.3; // Responsive
+      inputAnalyser.smoothingTimeConstant = 0.3;
       inputAnalyserRef.current = inputAnalyser;
-      // Pre-allocate buffer
       inputDataArrayRef.current = new Uint8Array(inputAnalyser.frequencyBinCount);
 
-      // --- VISUALIZER LOOP ---
+      // 3. Visualizer Loop
       const updateVolume = () => {
         if (!shouldProcessAudioRef.current) return;
 
         let maxVol = 0;
 
-        // 1. Get Input Volume (if mic not muted)
         if (inputAnalyserRef.current && !isMicMutedRef.current && inputDataArrayRef.current) {
             const data = inputDataArrayRef.current;
             inputAnalyserRef.current.getByteTimeDomainData(data as any);
             let sum = 0;
-            // Loop through data manually to avoid creating intermediate arrays
             for(let i=0; i<data.length; i++) {
                 const v = (data[i] - 128) / 128;
                 sum += v*v;
@@ -332,7 +286,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             maxVol = Math.sqrt(sum / data.length);
         }
 
-        // 2. Get Output Volume (Bot speaking)
         if (outputAnalyserRef.current && outputDataArrayRef.current) {
              const data = outputDataArrayRef.current;
              outputAnalyserRef.current.getByteTimeDomainData(data as any);
@@ -342,18 +295,20 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                  sum += v*v;
              }
              const outVol = Math.sqrt(sum / data.length);
-             // If bot is speaking, use that volume (boosted slightly for visual impact)
              if (outVol > maxVol) maxVol = outVol;
         }
         
+        // Safety check for NaN to prevent canvas crash
+        if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
+
         setVolume(maxVol);
         volumeAnimationRef.current = requestAnimationFrame(updateVolume);
       };
       volumeAnimationRef.current = requestAnimationFrame(updateVolume);
 
-
+      // --- GEMINI CONNECTION ---
       const ai = new GoogleGenAI({ apiKey: currentKey });
-
+      
       let tools = [];
       if (currentPersona.id === 'thabo') {
           tools = [{ googleSearch: {} }];
@@ -370,85 +325,75 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             },
             systemInstruction: currentPersona.baseInstruction,
             tools: tools,
-            outputAudioTranscription: { model: "gemini-2.5-flash" }, // Always enable transcription from API
+            outputAudioTranscription: { model: "gemini-2.5-flash" },
         },
         callbacks: {
           onopen: () => {
-            console.log('[BuaX1] WebSocket Opened / Session Connected');
+            console.log('[BuaX1] WebSocket Opened');
             setStatus('connected');
             lastUserSpeechTimeRef.current = Date.now();
 
-            // --- DEMO LIMIT TIMER (Dynamic Duration) ---
+            // Demo Timer
             demoTimerRef.current = window.setInterval(() => {
                 setTimeLeft(prev => {
                     if (prev <= 1) {
-                         console.log('[BuaX1] Demo time limit reached.');
-                         disconnect("Demo time limit reached. Please reload or contact sales.");
+                         disconnect("Demo time limit reached.");
                          return 0;
                     }
                     return prev - 1;
                 });
             }, 1000);
             
-            // Silence Detection
+            // Silence Check
             silenceCheckIntervalRef.current = window.setInterval(() => {
                 const now = Date.now();
-                
                 if (isMicMutedRef.current || activeSourcesRef.current.size > 0) {
                     lastUserSpeechTimeRef.current = now; 
                     return;
                 }
-
-                const silenceDuration = now - lastUserSpeechTimeRef.current;
-                if (silenceDuration > 60000) { 
-                     disconnect("Chat ended due to extended silence. Hamba kahle! 👋");
+                if (now - lastUserSpeechTimeRef.current > 60000) { 
+                     disconnect("Chat ended due to extended silence.");
                 }
             }, 1000);
 
-            // Input Processing
+            // Audio Processing Setup
             const source = inputCtx.createMediaStreamSource(stream);
             const processor = inputCtx.createScriptProcessor(4096, 1, 1);
-            
             const inputGain = inputCtx.createGain();
-            inputGain.gain.value = 0; // Mute input to speakers to prevent echo
+            inputGain.gain.value = 0; // Mute self
+            
             inputGainRef.current = inputGain;
 
             processor.onaudioprocess = (e) => {
-              if (!shouldProcessAudioRef.current) return; // Drop frame if stopping
+              if (!shouldProcessAudioRef.current) return;
 
               const inputData = e.inputBuffer.getChannelData(0);
               
               if (isMicMutedRef.current) {
-                  for (let i = 0; i < inputData.length; i++) {
-                      inputData[i] = 0;
-                  }
+                  inputData.fill(0);
               }
 
-              // Use robust VAD from audioUtils
               if (hasSpeech(inputData) && !isMicMutedRef.current) {
                   lastUserSpeechTimeRef.current = Date.now();
-                  // Clear transcript when user starts speaking to avoid old captions lingering
                   setTranscript('');
               }
 
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
+              
               sessionPromise.then(session => {
-                // Second gate: Check if we are still active when promise resolves
+                // Double-Check: Are we still running?
                 if (!shouldProcessAudioRef.current) return;
                 
                 try {
-                    // TS Cast as 'any' to avoid "Type 'string' has no properties in common with type 'Content'"
                     session.sendRealtimeInput({ media: pcmBlob } as any);
                 } catch(e) {
-                    // Swallow error if WebSocket is already closing/closed to prevent console spam
-                    // console.debug('Audio frame dropped (session closed)');
+                    // This error is expected if socket closed mid-frame. Ignore.
                 }
               });
             };
 
-            // Connect Input Graph
-            source.connect(inputAnalyser); // For visualizer
-            source.connect(processor);     // For streaming
+            source.connect(inputAnalyser);
+            source.connect(processor);
             processor.connect(inputGain);
             inputGain.connect(inputCtx.destination);
             
@@ -456,49 +401,31 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             processorRef.current = processor;
           },
           onmessage: async (msg: LiveServerMessage) => {
-             // 1. Capture the epoch when the message arrives.
              const currentEpoch = interruptionEpochRef.current;
-
              lastUserSpeechTimeRef.current = Date.now();
 
-             // Handle Transcription
-             const transcriptionText = msg.serverContent?.outputTranscription?.text;
-             if (transcriptionText) {
-                setTranscript(prev => prev + transcriptionText);
-             }
+             // Transcript
+             const txt = msg.serverContent?.outputTranscription?.text;
+             if (txt) setTranscript(prev => prev + txt);
 
              // Tool Calls
              if (msg.toolCall) {
                 const calls = msg.toolCall.functionCalls;
-                if (calls && calls.length > 0) {
+                if (calls?.length) {
                     const call = calls[0];
-                    
                     if (call.name === 'report_language_change') {
-                        // FIX: Treat language change as a "soft interruption" to prevent double-speak/echo
-                        // If the model started speaking BEFORE calling this tool, we must silence that audio
-                        console.log("[BuaX1] Language Tool Triggered. Silencing pre-switch audio.");
                         interruptionEpochRef.current += 1;
-                        activeSourcesRef.current.forEach(src => {
-                            try { src.stop(); src.disconnect(); } catch(e){}
-                        });
+                        activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
                         activeSourcesRef.current.clear();
-                        if (outputCtx) { nextStartTimeRef.current = outputCtx.currentTime; }
+                        if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
 
-                        // FIX: Added safe access to optional args
                         const lang = call.args ? (call.args['language'] as string) : null;
-                        
-                        if (lang) {
-                            setDetectedLanguage(lang);
-                        }
+                        if (lang) setDetectedLanguage(lang);
 
-                        // Determine strictness based on whether language ACTUALLY changed
-                        // Note: detectedLanguageRef is updated via useEffect, so current Ref is technically the 'old' language until next render
-                        const isSameLanguage = lang === detectedLanguageRef.current;
-                        
-                        // STRICTER INSTRUCTION PROTOCOL
-                        const responseContent = isSameLanguage
-                            ? `[SYSTEM: MONITORING. You are correctly speaking ${lang}. CRITICAL: MAINTAIN AUTHENTIC SOUTH AFRICAN ACCENT. Do not drift into American or Indian intonations.]`
-                            : `[SYSTEM: LANGUAGE SWITCH to ${lang} CONFIRMED. EXECUTE: 1. Acknowledge change (e.g. "Askies, let's speak ${lang}"). 2. SPEAK ONLY ${lang}. 3. FORCE South African Accent. 4. BAN American/Indian accents.]`;
+                        const isSame = lang === detectedLanguageRef.current;
+                        const responseContent = isSame
+                            ? `[SYSTEM: MONITORING. You are correctly speaking ${lang}.]`
+                            : `[SYSTEM: SWITCH to ${lang}. Acknowledge change. FORCE Accent.]`;
 
                         sessionPromise.then(session => {
                             if (!shouldProcessAudioRef.current) return;
@@ -510,113 +437,88 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                                         response: { result: responseContent }
                                     }]
                                 });
-                            } catch(e) {}
+                            } catch(e){}
                         });
                     }
                 }
              }
 
-             // Interruption Logic
+             // Interruption
              if (msg.serverContent?.interrupted) {
-                console.log("[BuaX1] Interruption detected. stopping audio.");
-                // Increment epoch to invalidate any processing/pending chunks
                 interruptionEpochRef.current += 1;
-                
-                // Immediate hard stop of all audio sources
-                activeSourcesRef.current.forEach(src => {
-                    try { 
-                        src.stop();
-                        src.disconnect();
-                    } catch(e) {}
-                });
+                activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
                 activeSourcesRef.current.clear();
-                setTranscript(''); // Clear transcript on interruption
-                
-                // Reset output time to current to avoid gaps or delays
-                if (outputCtx) {
-                    nextStartTimeRef.current = outputCtx.currentTime;
-                }
+                setTranscript('');
+                if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
                 return;
              }
              
              // Audio Output
              const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-             if (audioData) {
-                 if (outputCtx && gainNodeRef.current && outputCtx.state !== 'closed') {
-                     try {
-                        // Decode (Async operation)
-                        const rawBytes = base64ToUint8Array(audioData);
-                        const audioBuffer = await decodeAudioData(
-                            rawBytes, 
-                            outputCtx, 
-                            AUDIO_CONFIG.outputSampleRate, 
-                            1
-                        );
+             if (audioData && outputCtx && gainNodeRef.current && outputCtx.state !== 'closed') {
+                 try {
+                    const rawBytes = base64ToUint8Array(audioData);
+                    const audioBuffer = await decodeAudioData(rawBytes, outputCtx, AUDIO_CONFIG.outputSampleRate, 1);
 
-                        // 2. CHECK EPOCH: If interruption happened while we were decoding, DROP this chunk.
-                        // This prevents "ghost" audio from playing after user interrupted.
-                        if (currentEpoch !== interruptionEpochRef.current) {
-                            console.log("[BuaX1] Dropping stale audio chunk after interruption.");
-                            return;
-                        }
+                    if (currentEpoch !== interruptionEpochRef.current) return;
 
-                        const source = outputCtx.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(gainNodeRef.current);
-                        
-                        const startTime = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-                        source.start(startTime);
-                        nextStartTimeRef.current = startTime + audioBuffer.duration;
-                        
-                        activeSourcesRef.current.add(source);
-                        source.onended = () => {
-                            activeSourcesRef.current.delete(source);
-                        };
-                     } catch (err) {
-                         console.error("[BuaX1] Error decoding audio chunk", err);
-                     }
+                    const source = outputCtx.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(gainNodeRef.current);
+                    
+                    const startTime = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+                    source.start(startTime);
+                    nextStartTimeRef.current = startTime + audioBuffer.duration;
+                    
+                    activeSourcesRef.current.add(source);
+                    source.onended = () => activeSourcesRef.current.delete(source);
+                 } catch (err) {
+                     // console.error(err);
                  }
              }
           },
           onclose: () => {
-            console.log('[BuaX1] WebSocket/Session Closed');
-            setStatus('disconnected');
-            setTranscript('');
-            stopAudio(); // CRITICAL: Ensure audio loop stops when server closes connection
+            console.log('[BuaX1] WebSocket Closed');
+            // FIX: If we are already in Error state (e.g. from onerror), DO NOT overwrite it with 'disconnected'.
+            // This prevents the error modal from flickering closed.
+            if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
+                 // Check if we were 'connected' before. If we were just 'connecting', it's a connection failure.
+                 // If we were 'connected', it's a drop.
+                 if (statusRef.current === 'connecting') {
+                     setError("Unable to establish connection.");
+                 } else {
+                     setError("Connection interrupted.");
+                 }
+                 setStatus('error');
+            } else if (isIntentionalDisconnectRef.current) {
+                 setStatus('disconnected');
+            }
+            
+            stopAudio();
           },
           onerror: (err) => {
             console.error("[BuaX1] Session Error", err);
-            setError("Connection lost.");
-            setStatus('error');
-            stopAudio(); // CRITICAL: Ensure audio loop stops on error
+            setError("Connection failed. Please check your network or quota.");
+            setStatus('error'); // Trigger Error UI immediately
+            stopAudio();
           }
         }
       });
 
-      // Handle Key Rotation/Failover on initial connection failure
+      // Failover Logic
       sessionPromise.catch(async (err) => {
-         // Only retry if we haven't manually disconnected (sessionRef check)
-         if (sessionRef.current !== sessionPromise) {
-             return;
-         }
+         if (sessionRef.current !== sessionPromise) return;
 
          console.warn(`[BuaX1] Connection failed with key index ${currentKeyIndexRef.current}`, err);
 
-         // If we have more keys to try
          if (currentKeyIndexRef.current < apiKeys.length - 1) {
              console.log("[BuaX1] Switching to backup API key...");
              currentKeyIndexRef.current += 1;
-             
-             // Cleanup current failed attempt
              stopAudio();
-             
-             // Add slight delay to ensure cleanup settles, then retry
              setTimeout(() => connect(), 200);
          } else {
-             // All keys exhausted
-             console.error("[BuaX1] All API keys exhausted.");
              setStatus('error');
-             setError("Connection failed. Quota may be depleted.");
+             setError("All connection attempts failed.");
              stopAudio();
          }
       });
@@ -624,12 +526,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       sessionRef.current = sessionPromise;
 
     } catch (err: any) {
-      console.error('[BuaX1] Connection Setup Error:', err);
+      console.error('[BuaX1] Setup Error:', err);
       setStatus('error');
-      setError(err.message || "Failed to connect");
+      setError(err.message || "Failed to initialize audio.");
       stopAudio();
     }
-  }, [apiKeys, stopAudio, disconnect]); // Dependencies updated
+  }, [apiKeys, stopAudio, disconnect]);
 
   return {
     status,
@@ -643,6 +545,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     toggleMute,
     isMicMuted,
     toggleMic,
-    timeLeft // Exposed for UI
+    timeLeft
   };
 }
