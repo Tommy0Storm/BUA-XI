@@ -132,48 +132,48 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Feature Grid (Premium Style) */}
+        {/* Feature Grid (Premium Style - High Contrast) */}
         <div className="max-w-7xl mx-auto px-6 sm:px-8 mt-24 animate-fade-up" style={{ animationDelay: '0.2s' }}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 
                 {/* Card 1 */}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-gray-300 hover:shadow-[0_25px_70px_-10px_rgba(0,0,0,0.15)] hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden ring-1 ring-gray-100">
+                    <div className="absolute top-0 right-0 p-8 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
                         <Globe size={180} />
                     </div>
-                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                    <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
                         <Globe className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Hyper-Local</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
+                    <h3 className="text-2xl font-bold text-black mb-3 tracking-tight">Hyper-Local</h3>
+                    <p className="text-gray-600 leading-relaxed font-medium text-lg">
                         Our models code-switch effortlessly between English and Tsotsitaal, understanding "Now Now" vs "Just Now".
                     </p>
                 </div>
 
                 {/* Card 2 */}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-gray-300 hover:shadow-[0_25px_70px_-10px_rgba(0,0,0,0.15)] hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden ring-1 ring-gray-100">
+                     <div className="absolute top-0 right-0 p-8 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
                         <Lock size={180} />
                     </div>
-                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                    <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
                         <Lock className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Enterprise Grade</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
+                    <h3 className="text-2xl font-bold text-black mb-3 tracking-tight">Enterprise Grade</h3>
+                    <p className="text-gray-600 leading-relaxed font-medium text-lg">
                         SOC2 compliant infrastructure ready to integrate with your CRM, Salesforce, or internal support ticketing.
                     </p>
                 </div>
 
                 {/* Card 3 */}
-                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-200 hover:border-gray-300 hover:shadow-[0_25px_70px_-10px_rgba(0,0,0,0.15)] hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden ring-1 ring-gray-100">
+                     <div className="absolute top-0 right-0 p-8 opacity-[0.05] group-hover:opacity-[0.1] transition-opacity">
                         <Zap size={180} />
                     </div>
-                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                    <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
                         <Zap className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Sub-500ms Latency</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
+                    <h3 className="text-2xl font-bold text-black mb-3 tracking-tight">Sub-500ms Latency</h3>
+                    <p className="text-gray-600 leading-relaxed font-medium text-lg">
                         Powered by the Bua X1 Engine, achieving conversational fluidity that feels indistinguishable from human.
                     </p>
                 </div>
