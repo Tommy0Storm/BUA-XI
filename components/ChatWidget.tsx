@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
@@ -6,7 +5,7 @@ import AudioVisualizer from './AudioVisualizer';
 import { 
   MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2,
-  Loader2, AlertCircle, RefreshCw
+  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
@@ -19,6 +18,7 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
     case 'target': return <Target {...props} />;
     case 'sun': return <Sun {...props} />;
     case 'sparkles': return <Sparkles {...props} />;
+    case 'life-buoy': return <LifeBuoy {...props} />;
     default: return <User {...props} />;
   }
 };
@@ -369,28 +369,28 @@ export const ChatWidget: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Action Button (Closed State) */}
+      {/* Floating Action Button (Closed State) - UPGRADED TO PILL */}
       {!isOpen && (
         <div className="relative group">
-            <div className="absolute right-full mr-6 top-1/2 -translate-y-1/2 bg-black text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xl flex items-center whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0 pointer-events-none">
-                <span className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></span>
-                Start Live Demo
-            </div>
-
             <button
                 onClick={toggleWidget}
-                className="w-16 h-16 bg-black text-white rounded-[1.5rem] shadow-[0_15px_40px_rgba(0,0,0,0.3)] flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-105 active:scale-95 group relative overflow-hidden ring-4 ring-white"
+                className="pl-5 pr-6 py-4 bg-black text-white rounded-full shadow-[0_15px_40px_rgba(0,0,0,0.35)] flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-105 active:scale-95 group relative overflow-hidden ring-1 ring-white/10"
             >
-                <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                {/* Shine Effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
                 
-                {/* Icon Animation */}
-                <div className="relative">
-                     <MessageCircle size={30} strokeWidth={1.5} className="transition-transform group-hover:-translate-y-1" />
-                     <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-white/20 rounded-full blur-sm opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                {/* Content */}
+                <div className="flex items-center gap-3 relative z-10">
+                    <div className="relative">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-20 animate-ping"></span>
+                        <Radio size={20} className="text-green-400 relative z-10" />
+                    </div>
+                    <div className="flex flex-col items-start leading-none">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">Ready to deploy</span>
+                        <span className="text-base font-bold text-white tracking-wide">Test Live Prototype</span>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-all ml-1" />
                 </div>
-                
-                {/* Notification Dot */}
-                <div className="absolute top-4 right-4 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black animate-pulse"></div>
             </button>
         </div>
       )}
