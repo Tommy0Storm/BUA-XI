@@ -252,14 +252,14 @@ export const ChatWidget: React.FC = () => {
           <div className="pointer-events-auto bg-white w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-300 border border-white/20 ring-1 ring-black/5">
             
             {/* Header */}
-            <div className="bg-[#080808] p-8 shrink-0 relative overflow-hidden">
+            <div className="bg-[#080808] p-5 shrink-0 relative overflow-hidden">
                 {/* Decorative gradients */}
                 <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-b from-purple-500/10 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-t from-emerald-500/10 to-transparent rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
 
                 <div className="relative z-10 flex justify-between items-start">
                     <div>
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-3 mb-2">
                             <span className="flex h-2.5 w-2.5 relative">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -268,8 +268,8 @@ export const ChatWidget: React.FC = () => {
                                 Bua X1 Prototype Launcher
                             </span>
                         </div>
-                        <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-2">Select Neural Personality</h2>
-                        <p className="text-gray-400 max-w-lg text-sm sm:text-base leading-relaxed">
+                        <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-1">Select Neural Personality</h2>
+                        <p className="text-gray-400 max-w-lg text-sm leading-relaxed">
                             Deploy a specialized agent from the grid below. Each model is fine-tuned for specific South African contexts and languages.
                         </p>
                     </div>
@@ -391,7 +391,7 @@ export const ChatWidget: React.FC = () => {
                     <button
                         onClick={connect}
                         disabled={status === 'connecting'}
-                        className={`w-full py-5 rounded-2xl font-bold text-white text-lg shadow-[0_20px_40px_rgba(0,0,0,0.3)] transition-all transform flex items-center justify-center gap-3 group relative overflow-hidden
+                        className={`w-full py-3.5 rounded-xl font-bold text-white text-base shadow-[0_20px_40px_rgba(0,0,0,0.3)] transition-all transform flex items-center justify-center gap-3 group relative overflow-hidden
                             ${status === 'connecting' 
                                 ? 'bg-gray-800 cursor-not-allowed scale-[0.98]' 
                                 : 'bg-black hover:bg-gray-900 hover:-translate-y-1 active:scale-[0.98]'
@@ -425,7 +425,7 @@ export const ChatWidget: React.FC = () => {
         <div className="fixed bottom-6 right-6 z-50">
             <button
                 onClick={toggleWidget}
-                className="pl-5 pr-6 py-4 bg-black text-white rounded-full shadow-[0_15px_40px_rgba(0,0,0,0.35)] flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-105 active:scale-95 group relative overflow-hidden ring-1 ring-white/10"
+                className="pl-5 pr-6 py-3 bg-black text-white rounded-full shadow-[0_15px_40px_rgba(0,0,0,0.35)] flex items-center justify-center hover:bg-gray-900 transition-all transform hover:scale-105 active:scale-95 group relative overflow-hidden ring-1 ring-white/10"
             >
                 {/* Shine Effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
