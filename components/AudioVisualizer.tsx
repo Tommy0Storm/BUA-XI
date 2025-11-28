@@ -60,8 +60,12 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, volume, col
 
       // --- PHYSICS UPDATE ---
       
+      // Safety Check: Ensure volume is valid
+      let safeVolume = volume;
+      if (isNaN(safeVolume) || !isFinite(safeVolume)) safeVolume = 0;
+
       // Smooth Volume (Attack/Release)
-      const targetVolume = isActive ? Math.max(0.01, volume) : 0.01;
+      const targetVolume = isActive ? Math.max(0.01, safeVolume) : 0.01;
       // Faster attack for punchy visuals, slower release for smoothness
       const lerpFactor = targetVolume > state.smoothedVolume ? 0.3 : 0.05; 
       state.smoothedVolume += (targetVolume - state.smoothedVolume) * lerpFactor;
