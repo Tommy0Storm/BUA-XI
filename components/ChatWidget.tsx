@@ -5,7 +5,7 @@ import AudioVisualizer from './AudioVisualizer';
 import { 
   MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2,
-  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio, Monitor, ArrowUpRight
+  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio, Monitor, ArrowUpRight, Captions
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
@@ -27,11 +27,12 @@ export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
+  const [showCaptions, setShowCaptions] = useState(true);
   const apiKey = process.env.API_KEY;
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
 
-  const { status, connect, disconnect, volume, detectedLanguage, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft } = useGeminiLive({
+  const { status, connect, disconnect, volume, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
   });
@@ -152,20 +153,29 @@ export const ChatWidget: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Persona Info */}
-                    <div className="text-center space-y-2 z-20">
-                        <h3 className="text-3xl font-bold text-white tracking-tight drop-shadow-2xl">{selectedPersona.name}</h3>
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm">
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">{selectedPersona.role}</span>
-                        </div>
-                        
-                        <div className="mt-4 flex items-center justify-center gap-2">
-                             <span className="w-1 h-1 rounded-full bg-white/30"></span>
-                             <p className="text-xs text-white/40 tracking-wide">
-                                Detect: <span className="text-white font-medium">{detectedLanguage}</span>
-                            </p>
-                             <span className="w-1 h-1 rounded-full bg-white/30"></span>
-                        </div>
+                    {/* Persona Info & Captions */}
+                    <div className="text-center space-y-2 z-20 w-full px-6 min-h-[5rem]">
+                        {!transcript || !showCaptions ? (
+                            <>
+                                <h3 className="text-3xl font-bold text-white tracking-tight drop-shadow-2xl">{selectedPersona.name}</h3>
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm">
+                                    <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">{selectedPersona.role}</span>
+                                </div>
+                                <div className="mt-4 flex items-center justify-center gap-2">
+                                     <span className="w-1 h-1 rounded-full bg-white/30"></span>
+                                     <p className="text-xs text-white/40 tracking-wide">
+                                        Detect: <span className="text-white font-medium">{detectedLanguage}</span>
+                                    </p>
+                                     <span className="w-1 h-1 rounded-full bg-white/30"></span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="animate-fade-in-up bg-black/60 backdrop-blur-md border border-white/10 rounded-xl p-3 shadow-lg mx-auto max-w-[90%]">
+                                <p className="text-sm font-medium text-white/90 leading-relaxed line-clamp-3">
+                                    "{transcript}"
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -175,36 +185,51 @@ export const ChatWidget: React.FC = () => {
                          {/* Ambient Glow */}
                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 pointer-events-none"></div>
 
+                         {/* Mic Toggle */}
                          <button 
                             onClick={toggleMic}
-                            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
+                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
                                 isMicMuted 
                                 ? 'bg-red-500/10 text-red-500 ring-1 ring-red-500/30' 
                                 : 'hover:bg-white/10 text-white/60 hover:text-white'
                             }`}
                          >
-                             {isMicMuted ? <MicOff size={24} strokeWidth={1.5} /> : <Mic size={24} strokeWidth={1.5} />}
+                             {isMicMuted ? <MicOff size={22} strokeWidth={1.5} /> : <Mic size={22} strokeWidth={1.5} />}
                          </button>
 
+                         {/* End Session */}
                          <button 
                             onClick={disconnect}
-                            className="flex-1 mx-3 h-16 rounded-[1.8rem] bg-[#E11D48] hover:bg-[#be123c] text-white font-bold tracking-wide text-sm flex items-center justify-center shadow-[0_8px_20px_rgba(225,29,72,0.3)] hover:shadow-[0_8px_25px_rgba(225,29,72,0.5)] transition-all active:scale-[0.98]"
+                            className="flex-1 mx-2 h-14 rounded-[1.5rem] bg-[#E11D48] hover:bg-[#be123c] text-white font-bold tracking-wide text-sm flex items-center justify-center shadow-[0_8px_20px_rgba(225,29,72,0.3)] hover:shadow-[0_8px_25px_rgba(225,29,72,0.5)] transition-all active:scale-[0.98]"
                          >
                              <span className="flex items-center gap-2">
                                 <LogOut size={18} strokeWidth={2} />
-                                END SESSION
+                                END
                              </span>
                          </button>
 
+                         {/* Caption Toggle */}
+                         <button 
+                            onClick={() => setShowCaptions(!showCaptions)}
+                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
+                                showCaptions
+                                ? 'bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/30' 
+                                : 'hover:bg-white/10 text-white/60 hover:text-white'
+                            }`}
+                         >
+                             <Captions size={22} strokeWidth={1.5} />
+                         </button>
+
+                         {/* Mute Toggle */}
                          <button 
                             onClick={toggleMute}
-                            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
+                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 relative z-10 ${
                                 isMuted 
                                 ? 'bg-yellow-500/10 text-yellow-500 ring-1 ring-yellow-500/30' 
                                 : 'hover:bg-white/10 text-white/60 hover:text-white'
                             }`}
                          >
-                             {isMuted ? <VolumeX size={24} strokeWidth={1.5} /> : <Volume2 size={24} strokeWidth={1.5} />}
+                             {isMuted ? <VolumeX size={22} strokeWidth={1.5} /> : <Volume2 size={22} strokeWidth={1.5} />}
                          </button>
                      </div>
                 </div>
