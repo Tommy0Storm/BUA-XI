@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChatWidget } from './components/ChatWidget';
-import { ExternalLink, Cpu, Globe, Mic, ChevronRight, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Cpu, Globe, Mic, ChevronRight, Zap, ArrowRight, ShieldCheck, FileText, Lock } from 'lucide-react';
 
 const App: React.FC = () => {
   return (
@@ -23,6 +23,12 @@ const App: React.FC = () => {
         .animation-delay-4000 {
           animation-delay: 4s;
         }
+        @keyframes shimmer {
+          100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
+        }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
@@ -33,7 +39,7 @@ const App: React.FC = () => {
       `}</style>
 
       {/* Navigation */}
-      <nav className="fixed w-full z-50 transition-all duration-300 glass border-b border-gray-100">
+      <nav className="fixed w-full z-50 transition-all duration-300 glass border-b border-gray-100/50">
         <div className="max-w-7xl mx-auto px-6 sm:px-8">
           <div className="flex justify-between h-20 items-center">
             <div className="flex items-center gap-3 cursor-pointer group">
@@ -60,9 +66,8 @@ const App: React.FC = () => {
                 <a href="#" className="hidden sm:flex text-sm font-bold text-gray-900 hover:text-gray-600 transition-colors">
                     Login
                 </a>
-                <a href="#" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center group">
-                    Get Started
-                    <ArrowRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                <a href="#" className="bg-gray-100 text-gray-900 px-6 py-2.5 rounded-full text-sm font-bold hover:bg-gray-200 transition-all flex items-center group">
+                    Contact Sales
                 </a>
             </div>
           </div>
@@ -70,7 +75,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* Hero Section */}
-      <main className="relative pt-32 pb-24 overflow-hidden">
+      <main className="relative pt-36 pb-24 overflow-hidden">
         
         {/* Ambient Background */}
         <div className="absolute inset-0 w-full h-full bg-noise opacity-40 pointer-events-none z-0"></div>
@@ -81,15 +86,20 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 relative z-10">
             <div className="flex flex-col items-center justify-center text-center animate-fade-up">
                 
-                {/* Badge */}
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-gray-200 shadow-sm mb-10 hover:border-gray-300 transition-colors cursor-default group">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                {/* PREMIUM SYSTEM BADGE */}
+                <div className="relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-[#0a0a0a] border border-gray-800 shadow-xl mb-12 hover:scale-105 transition-transform cursor-default group overflow-hidden">
+                    {/* Shimmer Effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] animate-shimmer"></div>
+                    
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
                     </span>
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-500 group-hover:text-gray-900 transition-colors">
+                    <span className="text-xs font-bold uppercase tracking-[0.2em] text-white/90 group-hover:text-white transition-colors">
                         Bua X1 Neural Engine Online
                     </span>
+                    <div className="h-4 w-[1px] bg-white/20 mx-1"></div>
+                    <span className="text-[10px] font-mono text-emerald-400">v2.5.0 STABLE</span>
                 </div>
                 
                 {/* Headline */}
@@ -111,60 +121,59 @@ const App: React.FC = () => {
                 </p>
                 
                 <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-                    <button className="w-full sm:w-auto px-8 py-4 bg-black text-white rounded-2xl font-bold text-lg shadow-2xl shadow-gray-200 hover:bg-gray-900 hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-                        Start Free Trial
-                        <ChevronRight size={18} />
-                    </button>
                     <button className="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 border border-gray-200 rounded-2xl font-bold text-lg hover:border-gray-300 hover:shadow-lg transition-all flex items-center justify-center gap-2 group">
-                        <ExternalLink size={18} className="text-gray-400 group-hover:text-black transition-colors" />
-                        Documentation
+                        <FileText size={18} className="text-gray-400 group-hover:text-black transition-colors" />
+                        API Documentation
+                    </button>
+                    <button className="w-full sm:w-auto px-8 py-4 bg-transparent text-gray-500 border border-transparent rounded-2xl font-bold text-lg hover:text-black transition-all flex items-center justify-center gap-2">
+                        Enterprise Access
                     </button>
                 </div>
             </div>
         </div>
 
-        {/* Feature Grid (Bento Style) */}
+        {/* Feature Grid (Premium Style) */}
         <div className="max-w-7xl mx-auto px-6 sm:px-8 mt-24 animate-fade-up" style={{ animationDelay: '0.2s' }}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 
                 {/* Card 1 */}
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 transition-all duration-500 group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Globe size={120} />
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                        <Globe size={180} />
                     </div>
-                    <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
-                        <Globe className="text-green-600 w-6 h-6" />
+                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                        <Globe className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">Hyper-Local</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Hyper-Local</h3>
+                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
                         Our models code-switch effortlessly between English and Tsotsitaal, understanding "Now Now" vs "Just Now".
                     </p>
                 </div>
 
                 {/* Card 2 */}
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 transition-all duration-500 group relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <ShieldCheck size={120} />
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
+                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                        <Lock size={180} />
                     </div>
-                    <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
-                        <ShieldCheck className="text-blue-600 w-6 h-6" />
+                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                        <Lock className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">Enterprise Grade</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Enterprise Grade</h3>
+                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
                         SOC2 compliant infrastructure ready to integrate with your CRM, Salesforce, or internal support ticketing.
                     </p>
                 </div>
 
                 {/* Card 3 */}
-                <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-2xl hover:border-gray-200 transition-all duration-500 group relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <Zap size={120} />
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-100/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-500 group relative overflow-hidden">
+                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+                        <Zap size={180} />
                     </div>
-                    <div className="w-12 h-12 bg-yellow-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
-                        <Zap className="text-yellow-600 w-6 h-6" />
+                    <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500">
+                        <Zap className="text-gray-900 w-6 h-6 stroke-[1.5]" />
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-3">Sub-500ms Latency</h3>
-                    <p className="text-gray-500 leading-relaxed font-medium">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-3 tracking-tight">Sub-500ms Latency</h3>
+                    <p className="text-gray-500 leading-relaxed font-medium text-lg">
                         Powered by the Bua X1 Engine, achieving conversational fluidity that feels indistinguishable from human.
                     </p>
                 </div>
