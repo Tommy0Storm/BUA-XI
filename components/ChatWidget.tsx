@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
 import AudioVisualizer from './AudioVisualizer';
 import { 
-  MessageCircle, X, Mic, MicOff, Volume2, VolumeX, Check, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Activity, Clock, Play, BarChart2,
-  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio, Monitor, ArrowUpRight, Captions
+  X, Mic, MicOff, Volume2, VolumeX, LogOut, 
+  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Clock, Play, BarChart2,
+  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio, ArrowUpRight, Captions, Signal
 } from 'lucide-react';
 
 // Helper to map string keys to Lucide Components
@@ -23,6 +23,16 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
   }
 };
 
+// Helper to parse the stream and show only the active sentence
+const getLastSentence = (text: string): string => {
+    if (!text) return "";
+    // Split by punctuation that ends a sentence (. ? !), keeping the punctuation
+    // The lookbehind regex (?<=[.?!]) matches the position right after punctuation
+    const sentences = text.split(/(?<=[.?!])\s+/);
+    // Return the last segment (which is the one currently being spoken/streamed)
+    return sentences[sentences.length - 1];
+};
+
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
@@ -36,6 +46,9 @@ export const ChatWidget: React.FC = () => {
     apiKey,
     persona: selectedPersona,
   });
+
+  // Calculate the current subtitle to display
+  const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
 
   const toggleWidget = () => {
     if (isOpen) {
@@ -92,7 +105,7 @@ export const ChatWidget: React.FC = () => {
   const isTimeLow = timeLeft <= 30;
 
   // --- CONNECTED STATE (ULTRA PREMIUM VOICE MODAL) ---
-  if (status === 'connected' && isOpen) {
+  if ((status === 'connected' || status === 'connecting') && isOpen) {
       return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center animate-fade-in-up origin-bottom-right font-sans">
              <div className="w-[24rem] h-[40rem] bg-[#050505] rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden relative flex flex-col border border-white/5 ring-1 ring-white/5">
@@ -105,11 +118,20 @@ export const ChatWidget: React.FC = () => {
                 <div className="w-full pt-8 px-8 flex justify-between items-start z-20">
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                            <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                            </span>
-                            <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/50">Live Uplink</span>
+                            {status === 'connecting' ? (
+                                <div className="flex items-center gap-2 text-yellow-400">
+                                    <Loader2 size={12} className="animate-spin" />
+                                    <span className="text-[10px] font-bold tracking-[0.2em] uppercase">CONNECTING...</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                    </span>
+                                    <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/50">Live Uplink</span>
+                                </div>
+                            )}
                         </div>
                          <div className={`flex items-center gap-2 ${isTimeLow ? 'text-red-500 animate-pulse' : 'text-white/80'}`}>
                             <Clock size={12} strokeWidth={2} />
@@ -129,10 +151,10 @@ export const ChatWidget: React.FC = () => {
                     
                     {/* Integrated Visualizer & Avatar */}
                     <div className="relative w-80 h-80 flex items-center justify-center">
-                        {/* The Visualizer Ring - Removed Scale for sharp lines */}
+                        {/* The Visualizer Ring */}
                         <div className="absolute inset-0 flex items-center justify-center opacity-100 pointer-events-none">
                             <AudioVisualizer 
-                                isActive={!isMicMuted} 
+                                isActive={!isMicMuted && status === 'connected'} 
                                 volume={volume} 
                                 mode="circle"
                                 color={selectedPersona.gender === 'Male' ? '#10b981' : '#f59e0b'} 
@@ -153,10 +175,10 @@ export const ChatWidget: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Persona Info & Captions */}
-                    <div className="text-center space-y-2 z-20 w-full px-6 min-h-[5rem]">
-                        {!transcript || !showCaptions ? (
-                            <>
+                    {/* CINEMATIC CAPTIONS */}
+                    <div className="absolute bottom-4 left-0 right-0 px-6 z-40 flex flex-col items-center text-center">
+                        {!activeSubtitle || !showCaptions ? (
+                            <div className="space-y-2 animate-fade-in">
                                 <h3 className="text-3xl font-bold text-white tracking-tight drop-shadow-2xl">{selectedPersona.name}</h3>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/5 backdrop-blur-sm">
                                     <span className="text-[9px] font-bold uppercase tracking-widest text-white/60">{selectedPersona.role}</span>
@@ -164,16 +186,18 @@ export const ChatWidget: React.FC = () => {
                                 <div className="mt-4 flex items-center justify-center gap-2">
                                      <span className="w-1 h-1 rounded-full bg-white/30"></span>
                                      <p className="text-xs text-white/40 tracking-wide">
-                                        Detect: <span className="text-white font-medium">{detectedLanguage}</span>
+                                        Language: <span className="text-white font-medium">{detectedLanguage}</span>
                                     </p>
                                      <span className="w-1 h-1 rounded-full bg-white/30"></span>
                                 </div>
-                            </>
+                            </div>
                         ) : (
-                            <div className="animate-fade-in-up bg-black/60 backdrop-blur-md border border-white/10 rounded-xl p-3 shadow-lg mx-auto max-w-[90%]">
-                                <p className="text-sm font-medium text-white/90 leading-relaxed line-clamp-3">
-                                    "{transcript}"
-                                </p>
+                            <div className="animate-fade-up w-full">
+                                <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-2xl p-4 shadow-2xl">
+                                    <p className="text-lg md:text-xl font-medium text-white/95 leading-relaxed tracking-wide drop-shadow-lg font-sans">
+                                        {activeSubtitle}
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -199,7 +223,7 @@ export const ChatWidget: React.FC = () => {
 
                          {/* End Session */}
                          <button 
-                            onClick={disconnect}
+                            onClick={() => disconnect()}
                             className="flex-1 mx-2 h-14 rounded-[1.5rem] bg-[#E11D48] hover:bg-[#be123c] text-white font-bold tracking-wide text-sm flex items-center justify-center shadow-[0_8px_20px_rgba(225,29,72,0.3)] hover:shadow-[0_8px_25px_rgba(225,29,72,0.5)] transition-all active:scale-[0.98]"
                          >
                              <span className="flex items-center gap-2">
@@ -242,11 +266,11 @@ export const ChatWidget: React.FC = () => {
   return (
     <div className="font-sans">
       {/* Backdrop */}
-      {isOpen && status !== 'connected' && (
+      {isOpen && status !== 'connected' && status !== 'connecting' && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-40 animate-fade-in transition-opacity duration-300" onClick={toggleWidget}></div>
       )}
 
-      {isOpen && status !== 'connected' && (
+      {isOpen && status !== 'connected' && status !== 'connecting' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
           {/* Main Modal Container */}
           <div className="pointer-events-auto bg-white w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-300 border border-white/20 ring-1 ring-black/5">
@@ -390,29 +414,14 @@ export const ChatWidget: React.FC = () => {
                  <div className="max-w-2xl mx-auto pointer-events-auto">
                     <button
                         onClick={connect}
-                        disabled={status === 'connecting'}
-                        className={`w-full py-3.5 rounded-xl font-bold text-white text-base shadow-[0_20px_40px_rgba(0,0,0,0.3)] transition-all transform flex items-center justify-center gap-3 group relative overflow-hidden
-                            ${status === 'connecting' 
-                                ? 'bg-gray-800 cursor-not-allowed scale-[0.98]' 
-                                : 'bg-black hover:bg-gray-900 hover:-translate-y-1 active:scale-[0.98]'
-                            }
-                        `}
+                        className={`w-full py-3.5 rounded-xl font-bold text-white text-base shadow-[0_20px_40px_rgba(0,0,0,0.3)] transition-all transform flex items-center justify-center gap-3 group relative overflow-hidden bg-black hover:bg-gray-900 hover:-translate-y-1 active:scale-[0.98]`}
                     >
-                        {status === 'connecting' ? (
-                            <>
-                                <Loader2 size={24} className="animate-spin text-white/50" />
-                                <span className="tracking-widest text-white/80 text-sm">INITIALIZING UPLINK...</span>
-                            </>
-                        ) : (
-                            <>
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
-                                <div className="flex items-center gap-3">
-                                    <Mic size={24} className="text-emerald-400" />
-                                    <span>INITIALIZE SESSION WITH {selectedPersona.name.toUpperCase()}</span>
-                                    <ArrowUpRight size={24} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
-                                </div>
-                            </>
-                        )}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
+                        <div className="flex items-center gap-3">
+                            <Mic size={24} className="text-emerald-400" />
+                            <span>INITIALIZE SESSION WITH {selectedPersona.name.toUpperCase()}</span>
+                            <ArrowUpRight size={24} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" />
+                        </div>
                     </button>
                  </div>
             </div>
