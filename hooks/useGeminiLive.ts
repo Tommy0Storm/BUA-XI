@@ -67,8 +67,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   // Synchronous Gate: strictly tracks if we believe the socket is open
   const isConnectedRef = useRef<boolean>(false);
   
-  // Recursive connect reference
-  const connectRef = useRef<() => Promise<void>>(null);
+  // Recursive connect reference - explicitly typed as mutable
+  const connectRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     personaRef.current = persona;
