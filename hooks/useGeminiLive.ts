@@ -350,7 +350,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             },
             systemInstruction: currentPersona.baseInstruction,
             tools: tools,
-            outputAudioTranscription: { model: "gemini-2.5-flash" },
+            outputAudioTranscription: {}, // FIX: Must be empty object, not { model: ... }
         },
         callbacks: {
           onopen: () => {
@@ -524,11 +524,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 console.warn(`[BuaX1] Immediate disconnect detected (Quota?). Rotating API Key from index ${currentKeyIndexRef.current} to ${currentKeyIndexRef.current + 1}`);
                 currentKeyIndexRef.current += 1;
                 
-                // Recursive Retry
+                // Recursive Retry with Delay
                 stopAudio();
                 setTimeout(() => {
                     if (connectRef.current) connectRef.current();
-                }, 200);
+                }, 1000); // 1 Second delay to settle
                 return;
             }
 
@@ -574,7 +574,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              
              setTimeout(() => {
                 if (connectRef.current) connectRef.current();
-             }, 200);
+             }, 1000); // 1 Second delay
          } else {
              setStatus('error');
              setError("All connection attempts failed.");
