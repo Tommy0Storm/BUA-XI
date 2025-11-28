@@ -69,6 +69,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
   const silenceCheckIntervalRef = useRef<number | null>(null);
   
+  // CRITICAL: Gatekeeper flag to prevent audio processing after stop/close
+  const shouldProcessAudioRef = useRef<boolean>(false);
+
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
@@ -102,6 +105,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
   const stopAudio = useCallback(() => {
     console.log('[BuaX1] Stopping Audio...');
+    shouldProcessAudioRef.current = false; // IMMEDIATE: Stop all audio processing loops
     
     // Clear demo timer
     if (demoTimerRef.current) {
@@ -188,8 +192,17 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     console.log('[BuaX1] Audio Stopped.');
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+      return () => {
+          stopAudio();
+      };
+  }, [stopAudio]);
+
   const disconnect = useCallback(async (errorMessage?: string) => {
     console.log('[BuaX1] Disconnecting session...');
+    shouldProcessAudioRef.current = false;
+
     if (sessionRef.current) {
         try {
             const session = await sessionRef.current;
@@ -235,6 +248,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       
       // Reset interruption tracking
       interruptionEpochRef.current = 0;
+      shouldProcessAudioRef.current = true; // Enable audio processing
 
       // Initialize Audio Contexts
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -301,6 +315,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       // --- VISUALIZER LOOP ---
       const updateVolume = () => {
+        if (!shouldProcessAudioRef.current) return;
+
         let maxVol = 0;
 
         // 1. Get Input Volume (if mic not muted)
@@ -398,6 +414,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             inputGainRef.current = inputGain;
 
             processor.onaudioprocess = (e) => {
+              if (!shouldProcessAudioRef.current) return; // Drop frame if stopping
+
               const inputData = e.inputBuffer.getChannelData(0);
               
               if (isMicMutedRef.current) {
@@ -415,6 +433,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
               sessionPromise.then(session => {
+                // Second gate: Check if we are still active when promise resolves
+                if (!shouldProcessAudioRef.current) return;
+                
                 try {
                     // TS Cast as 'any' to avoid "Type 'string' has no properties in common with type 'Content'"
                     session.sendRealtimeInput({ media: pcmBlob } as any);
@@ -480,6 +501,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                             : `[SYSTEM: LANGUAGE SWITCH to ${lang} CONFIRMED. EXECUTE: 1. Acknowledge change (e.g. "Askies, let's speak ${lang}"). 2. SPEAK ONLY ${lang}. 3. FORCE South African Accent. 4. BAN American/Indian accents.]`;
 
                         sessionPromise.then(session => {
+                            if (!shouldProcessAudioRef.current) return;
                             try {
                                 session.sendToolResponse({
                                     functionResponses: [{
