@@ -59,12 +59,16 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const silenceCheckIntervalRef = useRef<number | null>(null);
   
   // --- STATE CONTROL REFS ---
-  // 1. connectionId: Unique ID for the current session attempt. Prevents zombie loops.
   const connectionIdRef = useRef<string | null>(null);
-  // 2. isIntentionalDisconnect: Distinguishes between user hitting "End" vs network failure
   const isIntentionalDisconnectRef = useRef<boolean>(false);
-  // 3. statusRef: Allows callbacks to know current React state without staleness
   const statusRef = useRef<ConnectionStatus>('disconnected');
+  const connectStartTimeRef = useRef<number>(0);
+  
+  // Synchronous Gate: strictly tracks if we believe the socket is open
+  const isConnectedRef = useRef<boolean>(false);
+  
+  // Recursive connect reference
+  const connectRef = useRef<() => Promise<void>>(null);
 
   useEffect(() => {
     personaRef.current = persona;
@@ -102,7 +106,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const stopAudio = useCallback(() => {
     console.log('[BuaX1] Stopping Audio Subsystems...');
     
-    // CRITICAL: Invalidate the current session immediately.
+    // CRITICAL: Immediate synchronous gate close
+    isConnectedRef.current = false;
     connectionIdRef.current = null;
     
     // Kill the processor loop immediately
@@ -174,7 +179,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const disconnect = useCallback(async (errorMessage?: string) => {
     console.log('[BuaX1] Disconnecting session (Intentional)...');
     isIntentionalDisconnectRef.current = true;
-    connectionIdRef.current = null; // Kill loop
+    isConnectedRef.current = false; // Immediate gate
 
     if (sessionRef.current) {
         try {
@@ -207,6 +212,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     
     // Ensure clean slate
     stopAudio();
+    isConnectedRef.current = false;
 
     const currentKey = apiKeys[currentKeyIndexRef.current];
     console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current}`);
@@ -227,6 +233,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       // Reset State Flags
       interruptionEpochRef.current = 0;
       isIntentionalDisconnectRef.current = false;
+      connectStartTimeRef.current = Date.now();
 
       // --- AUDIO SETUP ---
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -350,6 +357,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             console.log('[BuaX1] WebSocket Opened');
             if (connectionIdRef.current !== myConnectionId) return; // Stale connection
 
+            // MARK: Gate Open
+            isConnectedRef.current = true;
             setStatus('connected');
             lastUserSpeechTimeRef.current = Date.now();
 
@@ -385,8 +394,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             inputGainRef.current = inputGain;
 
             processor.onaudioprocess = (e) => {
-              // 1. Strict Closure Check
-              if (connectionIdRef.current !== myConnectionId) return;
+              // 1. Synchronous Gate Check
+              if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
 
               const inputData = e.inputBuffer.getChannelData(0);
               
@@ -402,13 +411,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
               
               sessionPromise.then(session => {
-                // 2. Double Strict Closure Check inside Promise
-                if (connectionIdRef.current !== myConnectionId) return;
+                // 2. Gate Check again inside Promise
+                if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
                 
                 try {
                     session.sendRealtimeInput({ media: pcmBlob } as any);
                 } catch(e) {
-                    // Ignore closed socket errors silently
+                    // Suppress send errors if connection is dropping
                 }
               });
             };
@@ -422,7 +431,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             processorRef.current = processor;
           },
           onmessage: async (msg: LiveServerMessage) => {
-             if (connectionIdRef.current !== myConnectionId) return;
+             if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
 
              const currentEpoch = interruptionEpochRef.current;
              lastUserSpeechTimeRef.current = Date.now();
@@ -451,7 +460,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                             : `[SYSTEM: SWITCH to ${lang}. Acknowledge change. FORCE Accent.]`;
 
                         sessionPromise.then(session => {
-                            if (connectionIdRef.current !== myConnectionId) return;
+                            if (!isConnectedRef.current) return;
                             try {
                                 session.sendToolResponse({
                                     functionResponses: [{
@@ -502,14 +511,34 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
           },
           onclose: () => {
             console.log('[BuaX1] WebSocket Closed');
+            // Gate Close
+            isConnectedRef.current = false;
+            
             if (connectionIdRef.current !== myConnectionId) return; // Ignore if already reset
 
+            // Determine if this was an immediate failure (Quota/Key issue)
+            const duration = Date.now() - connectStartTimeRef.current;
+            const isImmediateFailure = duration < 4000; // Expanded window to catch streaming quota limits
+
+            if (isImmediateFailure && currentKeyIndexRef.current < apiKeys.length - 1) {
+                console.warn(`[BuaX1] Immediate disconnect detected (Quota?). Rotating API Key from index ${currentKeyIndexRef.current} to ${currentKeyIndexRef.current + 1}`);
+                currentKeyIndexRef.current += 1;
+                
+                // Recursive Retry
+                stopAudio();
+                setTimeout(() => {
+                    if (connectRef.current) connectRef.current();
+                }, 200);
+                return;
+            }
+
             if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
-                 if (statusRef.current === 'connecting') {
-                     setError("Unable to establish connection.");
-                 } else {
-                     setError("Connection interrupted.");
+                 let msg = "Connection interrupted.";
+                 if (statusRef.current === 'connecting' || isImmediateFailure) {
+                     msg = "Connection rejected. Please check API Quota or Key.";
                  }
+                 
+                 setError(msg);
                  setStatus('error');
             } else if (isIntentionalDisconnectRef.current) {
                  setStatus('disconnected');
@@ -519,6 +548,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
           },
           onerror: (err) => {
             if (connectionIdRef.current !== myConnectionId) return;
+            isConnectedRef.current = false;
+            
             console.error("[BuaX1] Session Error", err);
             setError("Connection failed. Please check your network or quota.");
             setStatus('error'); // Trigger Error UI immediately
@@ -527,7 +558,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         }
       });
 
-      // Failover Logic
+      // Failover Logic (Handshake failures)
       sessionPromise.catch(async (err) => {
          // Only respond if this is still the active attempt
          if (connectionIdRef.current !== myConnectionId) return;
@@ -541,7 +572,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              // Clean up this attempt before retrying
              stopAudio();
              
-             setTimeout(() => connect(), 200);
+             setTimeout(() => {
+                if (connectRef.current) connectRef.current();
+             }, 200);
          } else {
              setStatus('error');
              setError("All connection attempts failed.");
@@ -560,6 +593,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       }
     }
   }, [apiKeys, stopAudio, disconnect]);
+
+  // Keep ref up to date for recursion
+  useEffect(() => {
+      connectRef.current = connect;
+  }, [connect]);
 
   return {
     status,
