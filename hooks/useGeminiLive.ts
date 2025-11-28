@@ -15,6 +15,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [volume, setVolume] = useState(0); // For visualizer (Input OR Output)
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
+  const [transcript, setTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isMicMuted, setIsMicMuted] = useState(false);
@@ -162,6 +163,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         audioContextRef.current = null;
     }
     setVolume(0);
+    setTranscript('');
     console.log('[BuaX1] Audio Stopped.');
   }, []);
 
@@ -179,6 +181,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     sessionRef.current = null;
     setStatus('disconnected');
     setDetectedLanguage('Auto-Detect');
+    setTranscript('');
     if (errorMessage) {
         setError(errorMessage);
     }
@@ -201,6 +204,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       setStatus('connecting');
       setError(null);
       setDetectedLanguage('Auto-Detect');
+      setTranscript('');
       
       const currentPersona = personaRef.current;
       
@@ -324,6 +328,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             },
             systemInstruction: currentPersona.baseInstruction,
             tools: tools,
+            outputAudioTranscription: { model: "gemini-2.5-flash" }, // Always enable transcription from API
         },
         callbacks: {
           onopen: () => {
@@ -378,6 +383,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               // Use robust VAD from audioUtils
               if (hasSpeech(inputData) && !isMicMutedRef.current) {
                   lastUserSpeechTimeRef.current = Date.now();
+                  // Clear transcript when user starts speaking to avoid old captions lingering
+                  setTranscript('');
               }
 
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
@@ -402,6 +409,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              const currentEpoch = interruptionEpochRef.current;
 
              lastUserSpeechTimeRef.current = Date.now();
+
+             // Handle Transcription
+             const transcriptionText = msg.serverContent?.outputTranscription?.text;
+             if (transcriptionText) {
+                setTranscript(prev => prev + transcriptionText);
+             }
 
              // Tool Calls
              if (msg.toolCall) {
@@ -463,6 +476,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     } catch(e) {}
                 });
                 activeSourcesRef.current.clear();
+                setTranscript(''); // Clear transcript on interruption
                 
                 // Reset output time to current to avoid gaps or delays
                 if (outputCtx) {
@@ -512,6 +526,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
           },
           onclose: () => {
             setStatus('disconnected');
+            setTranscript('');
           },
           onerror: (err) => {
             console.error("[BuaX1] Error", err);
@@ -565,6 +580,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     disconnect: () => disconnect(), 
     volume,
     detectedLanguage,
+    transcript,
     error,
     isMuted,
     toggleMute,
