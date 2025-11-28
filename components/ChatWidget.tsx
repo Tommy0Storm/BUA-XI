@@ -127,8 +127,8 @@ export const ChatWidget: React.FC = () => {
                     
                     {/* Integrated Visualizer & Avatar */}
                     <div className="relative w-80 h-80 flex items-center justify-center">
-                        {/* The Visualizer Ring */}
-                        <div className="absolute inset-0 flex items-center justify-center opacity-80 scale-110 pointer-events-none">
+                        {/* The Visualizer Ring - Removed Scale for sharp lines */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-100 pointer-events-none">
                             <AudioVisualizer 
                                 isActive={!isMicMuted} 
                                 volume={volume} 
