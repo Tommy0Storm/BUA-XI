@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChatWidget } from './components/ChatWidget';
-import { ExternalLink, Cpu, Globe, Mic, ChevronRight, Zap, ArrowRight, ShieldCheck, FileText, Lock } from 'lucide-react';
+import { ExternalLink, Cpu, Globe, Mic, ChevronRight, Zap, ArrowRight, ShieldCheck, FileText, Lock, Database, FileSpreadsheet, Send } from 'lucide-react';
 
 const App: React.FC = () => {
   return (
@@ -180,6 +180,116 @@ const App: React.FC = () => {
             </div>
         </div>
       </main>
+
+      {/* Integration & Action Section */}
+      <section className="relative py-32 overflow-hidden bg-black text-white">
+        {/* Background FX */}
+        <div className="absolute inset-0 bg-noise opacity-20"></div>
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-emerald-900/20 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
+
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 relative z-10">
+          <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-24">
+
+            {/* Text Content */}
+            <div className="flex-1 space-y-8">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md">
+                <ShieldCheck size={14} className="text-emerald-400" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/80">Secure Action Layer</span>
+              </div>
+
+              <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+                Beyond Conversation. <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                  True Agency.
+                </span>
+              </h2>
+
+              <p className="text-lg text-gray-400 leading-relaxed font-medium">
+                The Bua X1 Engine doesn't just talk—it works. Conversational AI is often passive, but true value comes from agency. 
+                We bridge the gap between unstructured voice data and your rigid business systems.
+                When a commitment is made in dialogue, it is instantly executed in your infrastructure.
+              </p>
+
+              <div className="space-y-6 pt-4">
+                 {/* Feature 1 */}
+                 <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                       <Database size={24} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-white mb-2">Autonomous CRM Sync</h4>
+                      <p className="text-gray-400 text-sm">Real-time updates to Salesforce or HubSpot. Logs sentiment, objections, and next steps without human data entry.</p>
+                    </div>
+                 </div>
+
+                 {/* Feature 2 */}
+                 <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                       <FileSpreadsheet size={24} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-white mb-2">Financial Reconciliation</h4>
+                      <p className="text-gray-400 text-sm">Automatically updates the Debtors Book when a "Promise to Pay" is detected, flagging the account for review.</p>
+                    </div>
+                 </div>
+
+                 {/* Feature 3 */}
+                 <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                       <Send size={24} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-white mb-2">Stakeholder Dispatch</h4>
+                      <p className="text-gray-400 text-sm">Instantly emails transcripts to compliance officers or alerts managers via Slack when high-risk keywords are detected.</p>
+                    </div>
+                 </div>
+              </div>
+            </div>
+
+            {/* Visual Side */}
+            <div className="flex-1 w-full">
+               <div className="relative rounded-[2.5rem] bg-[#0F0F0F] border border-white/10 p-2 shadow-2xl overflow-hidden group hover:scale-[1.02] transition-transform duration-500">
+                   {/* Fake Code / Action Interface */}
+                   <div className="bg-black/50 rounded-[2rem] p-6 h-full min-h-[400px] flex flex-col relative">
+                      <div className="flex items-center gap-2 mb-8 border-b border-white/5 pb-4">
+                         <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
+                         <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
+                         <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
+                         <div className="ml-auto text-xs text-gray-600 font-mono">ACTION_LOG.json</div>
+                      </div>
+
+                      <div className="space-y-4 font-mono text-sm">
+                         <div className="flex gap-4 text-emerald-500/50">
+                            <span>10:42:01</span>
+                            <span className="text-emerald-400">Input Received: "I'll pay R500 on Friday."</span>
+                         </div>
+                         <div className="flex gap-4 text-blue-500/50">
+                            <span>10:42:02</span>
+                            <span className="text-blue-400">Processing Intent: PROMISE_TO_PAY</span>
+                         </div>
+                         <div className="flex gap-4 text-purple-500/50">
+                            <span>10:42:03</span>
+                            <span className="text-purple-400">Executing Tool: update_sage_ledger(id=882, amount=500)</span>
+                         </div>
+                         <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 mt-4 animate-pulse">
+                            <div className="text-emerald-500 font-bold mb-1">SUCCESS</div>
+                            <div className="text-gray-400 text-xs">Ledger updated. Receipt #99281 generated. Email dispatch to accounts@vcb-ai.online queued.</div>
+                         </div>
+                      </div>
+                      
+                      {/* Floating Badge */}
+                      <div className="absolute bottom-6 right-6 px-4 py-2 bg-white text-black rounded-lg font-bold text-xs shadow-lg flex items-center gap-2">
+                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                         LIVE EXECUTION
+                      </div>
+                   </div>
+               </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-100 py-12 relative z-10">
