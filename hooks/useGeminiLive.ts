@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
@@ -58,8 +59,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const silenceCheckIntervalRef = useRef<number | null>(null);
   
   // --- STATE CONTROL REFS ---
-  // 1. shouldProcessAudio: Master switch for the audio loop
-  const shouldProcessAudioRef = useRef<boolean>(false);
+  // 1. connectionId: Unique ID for the current session attempt. Prevents zombie loops.
+  const connectionIdRef = useRef<string | null>(null);
   // 2. isIntentionalDisconnect: Distinguishes between user hitting "End" vs network failure
   const isIntentionalDisconnectRef = useRef<boolean>(false);
   // 3. statusRef: Allows callbacks to know current React state without staleness
@@ -100,7 +101,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
   const stopAudio = useCallback(() => {
     console.log('[BuaX1] Stopping Audio Subsystems...');
-    shouldProcessAudioRef.current = false; 
+    
+    // CRITICAL: Invalidate the current session immediately.
+    connectionIdRef.current = null;
     
     // Kill the processor loop immediately
     if (processorRef.current) {
@@ -171,7 +174,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const disconnect = useCallback(async (errorMessage?: string) => {
     console.log('[BuaX1] Disconnecting session (Intentional)...');
     isIntentionalDisconnectRef.current = true;
-    shouldProcessAudioRef.current = false;
+    connectionIdRef.current = null; // Kill loop
 
     if (sessionRef.current) {
         try {
@@ -201,9 +204,16 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       setStatus('error');
       return;
     }
+    
+    // Ensure clean slate
+    stopAudio();
 
     const currentKey = apiKeys[currentKeyIndexRef.current];
     console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current}`);
+
+    // Generate a unique ID for this connection attempt
+    const myConnectionId = `session-${Date.now()}-${Math.random()}`;
+    connectionIdRef.current = myConnectionId;
 
     try {
       setStatus('connecting');
@@ -216,7 +226,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       
       // Reset State Flags
       interruptionEpochRef.current = 0;
-      shouldProcessAudioRef.current = true;
       isIntentionalDisconnectRef.current = false;
 
       // --- AUDIO SETUP ---
@@ -226,6 +235,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       
       await Promise.all([outputCtx.resume(), inputCtx.resume()]);
       
+      // If user cancelled while we were waiting for contexts
+      if (connectionIdRef.current !== myConnectionId) return;
+
       audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
       nextStartTimeRef.current = outputCtx.currentTime;
@@ -261,6 +273,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               channelCount: 1
           } 
       });
+      
+      // Check again
+      if (connectionIdRef.current !== myConnectionId) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+      }
       streamRef.current = stream;
 
       const inputAnalyser = inputCtx.createAnalyser();
@@ -271,7 +289,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       // 3. Visualizer Loop
       const updateVolume = () => {
-        if (!shouldProcessAudioRef.current) return;
+        // Strict ID check
+        if (connectionIdRef.current !== myConnectionId) return;
 
         let maxVol = 0;
 
@@ -298,7 +317,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              if (outVol > maxVol) maxVol = outVol;
         }
         
-        // Safety check for NaN to prevent canvas crash
         if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
 
         setVolume(maxVol);
@@ -330,6 +348,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         callbacks: {
           onopen: () => {
             console.log('[BuaX1] WebSocket Opened');
+            if (connectionIdRef.current !== myConnectionId) return; // Stale connection
+
             setStatus('connected');
             lastUserSpeechTimeRef.current = Date.now();
 
@@ -360,12 +380,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             const source = inputCtx.createMediaStreamSource(stream);
             const processor = inputCtx.createScriptProcessor(4096, 1, 1);
             const inputGain = inputCtx.createGain();
-            inputGain.gain.value = 0; // Mute self
+            inputGain.gain.value = 0; // Mute self feedback
             
             inputGainRef.current = inputGain;
 
             processor.onaudioprocess = (e) => {
-              if (!shouldProcessAudioRef.current) return;
+              // 1. Strict Closure Check
+              if (connectionIdRef.current !== myConnectionId) return;
 
               const inputData = e.inputBuffer.getChannelData(0);
               
@@ -381,13 +402,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
               
               sessionPromise.then(session => {
-                // Double-Check: Are we still running?
-                if (!shouldProcessAudioRef.current) return;
+                // 2. Double Strict Closure Check inside Promise
+                if (connectionIdRef.current !== myConnectionId) return;
                 
                 try {
                     session.sendRealtimeInput({ media: pcmBlob } as any);
                 } catch(e) {
-                    // This error is expected if socket closed mid-frame. Ignore.
+                    // Ignore closed socket errors silently
                 }
               });
             };
@@ -401,6 +422,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             processorRef.current = processor;
           },
           onmessage: async (msg: LiveServerMessage) => {
+             if (connectionIdRef.current !== myConnectionId) return;
+
              const currentEpoch = interruptionEpochRef.current;
              lastUserSpeechTimeRef.current = Date.now();
 
@@ -428,7 +451,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                             : `[SYSTEM: SWITCH to ${lang}. Acknowledge change. FORCE Accent.]`;
 
                         sessionPromise.then(session => {
-                            if (!shouldProcessAudioRef.current) return;
+                            if (connectionIdRef.current !== myConnectionId) return;
                             try {
                                 session.sendToolResponse({
                                     functionResponses: [{
@@ -479,11 +502,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
           },
           onclose: () => {
             console.log('[BuaX1] WebSocket Closed');
-            // FIX: If we are already in Error state (e.g. from onerror), DO NOT overwrite it with 'disconnected'.
-            // This prevents the error modal from flickering closed.
+            if (connectionIdRef.current !== myConnectionId) return; // Ignore if already reset
+
             if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
-                 // Check if we were 'connected' before. If we were just 'connecting', it's a connection failure.
-                 // If we were 'connected', it's a drop.
                  if (statusRef.current === 'connecting') {
                      setError("Unable to establish connection.");
                  } else {
@@ -497,6 +518,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             stopAudio();
           },
           onerror: (err) => {
+            if (connectionIdRef.current !== myConnectionId) return;
             console.error("[BuaX1] Session Error", err);
             setError("Connection failed. Please check your network or quota.");
             setStatus('error'); // Trigger Error UI immediately
@@ -507,14 +529,18 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       // Failover Logic
       sessionPromise.catch(async (err) => {
-         if (sessionRef.current !== sessionPromise) return;
+         // Only respond if this is still the active attempt
+         if (connectionIdRef.current !== myConnectionId) return;
 
          console.warn(`[BuaX1] Connection failed with key index ${currentKeyIndexRef.current}`, err);
 
          if (currentKeyIndexRef.current < apiKeys.length - 1) {
              console.log("[BuaX1] Switching to backup API key...");
              currentKeyIndexRef.current += 1;
+             
+             // Clean up this attempt before retrying
              stopAudio();
+             
              setTimeout(() => connect(), 200);
          } else {
              setStatus('error');
@@ -526,10 +552,12 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       sessionRef.current = sessionPromise;
 
     } catch (err: any) {
-      console.error('[BuaX1] Setup Error:', err);
-      setStatus('error');
-      setError(err.message || "Failed to initialize audio.");
-      stopAudio();
+      if (connectionIdRef.current === myConnectionId) {
+          console.error('[BuaX1] Setup Error:', err);
+          setStatus('error');
+          setError(err.message || "Failed to initialize audio.");
+          stopAudio();
+      }
     }
   }, [apiKeys, stopAudio, disconnect]);
 
