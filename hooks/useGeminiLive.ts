@@ -122,7 +122,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     }
 
     if (inputContextRef.current) {
-      inputContextRef.current.close();
+      try {
+        inputContextRef.current.close();
+      } catch(e) { /* ignore already closed */ }
       inputContextRef.current = null;
     }
     if (streamRef.current) {
@@ -130,27 +132,39 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       streamRef.current = null;
     }
     if (processorRef.current) {
-      processorRef.current.disconnect();
+      try {
+        processorRef.current.disconnect();
+      } catch(e) {}
       processorRef.current = null;
     }
     if (sourceRef.current) {
-      sourceRef.current.disconnect();
+      try {
+        sourceRef.current.disconnect();
+      } catch(e) {}
       sourceRef.current = null;
     }
     if (gainNodeRef.current) {
-        gainNodeRef.current.disconnect();
+        try {
+            gainNodeRef.current.disconnect();
+        } catch(e) {}
         gainNodeRef.current = null;
     }
     if (inputGainRef.current) {
-        inputGainRef.current.disconnect();
+        try {
+            inputGainRef.current.disconnect();
+        } catch(e) {}
         inputGainRef.current = null;
     }
     if (inputAnalyserRef.current) {
-        inputAnalyserRef.current.disconnect();
+        try {
+            inputAnalyserRef.current.disconnect();
+        } catch(e) {}
         inputAnalyserRef.current = null;
     }
     if (outputAnalyserRef.current) {
-        outputAnalyserRef.current.disconnect();
+        try {
+            outputAnalyserRef.current.disconnect();
+        } catch(e) {}
         outputAnalyserRef.current = null;
     }
 
@@ -164,7 +178,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     activeSourcesRef.current.clear();
     
     if (audioContextRef.current) {
-        audioContextRef.current.close();
+        try {
+            audioContextRef.current.close();
+        } catch(e) { /* ignore */ }
         audioContextRef.current = null;
     }
     setVolume(0);
@@ -399,9 +415,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
               const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
               sessionPromise.then(session => {
-                // TS Cast as 'any' to avoid "Type 'string' has no properties in common with type 'Content'"
-                // This seems to be a type definition issue in the SDK beta vs the runtime requirement.
-                session.sendRealtimeInput({ media: pcmBlob } as any);
+                try {
+                    // TS Cast as 'any' to avoid "Type 'string' has no properties in common with type 'Content'"
+                    session.sendRealtimeInput({ media: pcmBlob } as any);
+                } catch(e) {
+                    // Swallow error if WebSocket is already closing/closed to prevent console spam
+                    // console.debug('Audio frame dropped (session closed)');
+                }
               });
             };
 
@@ -460,13 +480,15 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                             : `[SYSTEM: LANGUAGE SWITCH to ${lang} CONFIRMED. EXECUTE: 1. Acknowledge change (e.g. "Askies, let's speak ${lang}"). 2. SPEAK ONLY ${lang}. 3. FORCE South African Accent. 4. BAN American/Indian accents.]`;
 
                         sessionPromise.then(session => {
-                            session.sendToolResponse({
-                                functionResponses: [{
-                                    id: call.id,
-                                    name: call.name,
-                                    response: { result: responseContent }
-                                }]
-                            });
+                            try {
+                                session.sendToolResponse({
+                                    functionResponses: [{
+                                        id: call.id,
+                                        name: call.name,
+                                        response: { result: responseContent }
+                                    }]
+                                });
+                            } catch(e) {}
                         });
                     }
                 }
@@ -535,13 +557,16 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              }
           },
           onclose: () => {
+            console.log('[BuaX1] WebSocket/Session Closed');
             setStatus('disconnected');
             setTranscript('');
+            stopAudio(); // CRITICAL: Ensure audio loop stops when server closes connection
           },
           onerror: (err) => {
-            console.error("[BuaX1] Error", err);
+            console.error("[BuaX1] Session Error", err);
             setError("Connection lost.");
             setStatus('error');
+            stopAudio(); // CRITICAL: Ensure audio loop stops on error
           }
         }
       });
