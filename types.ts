@@ -12,6 +12,7 @@ export interface Persona {
   gender: 'Male' | 'Female';
   voiceName: string; // The Engine voice name (e.g., Fenrir, Puck)
   role: string;
+  vibe: string; // New field for short visual descriptor
   description: string;
   icon: string;
   baseInstruction: string;
