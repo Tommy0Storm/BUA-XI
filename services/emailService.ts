@@ -1,4 +1,3 @@
-
 import emailjs from '@emailjs/browser';
 import { Persona } from '../types';
 import { dispatchLog } from '../utils/consoleUtils';
@@ -106,7 +105,8 @@ export const sendTranscriptEmail = async (
     history: TranscriptEntry[],
     durationMs: number,
     persona: Persona,
-    sessionId: string
+    sessionId: string,
+    userEmail?: string
 ): Promise<boolean> => {
     
     dispatchLog('action', 'Generating Transcript Bundle...');
@@ -123,8 +123,10 @@ export const sendTranscriptEmail = async (
         return false;
     }
 
+    const recipientEmail = userEmail || "tommy@vcb-ai.online";
+
     const templateParams = {
-        email: "tommy@vcb-ai.online",
+        email: recipientEmail,
         subject: `[TRANSCRIPT] ${persona.name} - ${new Date().toLocaleString()}`,
         transcript_html: htmlBody, 
         duration: Math.round(durationMs / 1000) + "s",
@@ -137,7 +139,7 @@ export const sendTranscriptEmail = async (
     try {
         emailjs.init(publicKey);
         await emailjs.send(serviceId, templateId, templateParams, publicKey);
-        dispatchLog('success', 'Transcript Emailed Successfully', `Recipient: tommy@vcb-ai.online`);
+        dispatchLog('success', 'Transcript Emailed Successfully', `Recipient: ${recipientEmail}`);
         return true;
     } catch (error: any) {
         const errorMsg = error?.text || error?.message || JSON.stringify(error);
