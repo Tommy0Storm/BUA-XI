@@ -330,7 +330,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       compressor.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
 
-      // 2. Input Pipeline (Microphone)
+      // 2. Input Pipeline (Microphone) with Noise Gate Logic
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { 
             sampleRate: AUDIO_CONFIG.inputSampleRate,
@@ -350,7 +350,17 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       inputAnalyser.smoothingTimeConstant = 0.5;
       inputAnalyserRef.current = inputAnalyser;
       
-      source.connect(inputAnalyser);
+      // Noise Gate Implementation:
+      // We use a DynamicsCompressor with aggressive threshold to gate background noise
+      const noiseGate = inputCtx.createDynamicsCompressor();
+      noiseGate.threshold.value = -50; // Gate open threshold
+      noiseGate.knee.value = 40;
+      noiseGate.ratio.value = 12; // High ratio for aggressive gating
+      noiseGate.attack.value = 0;
+      noiseGate.release.value = 0.25;
+
+      source.connect(noiseGate);
+      noiseGate.connect(inputAnalyser);
 
       // 3. Audio Worklet - Robust Loading
       const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
@@ -361,7 +371,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       } catch (err: any) {
         throw new Error(`Failed to load audio worklet: ${err.message}`);
       } finally {
-        URL.revokeObjectURL(workletUrl); // Cleanup memory
+        URL.revokeObjectURL(workletUrl); // Cleanup memory immediately
       }
       
       const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
