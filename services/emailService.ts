@@ -1,0 +1,157 @@
+import emailjs from '@emailjs/browser';
+import { Persona } from '../types';
+
+interface TranscriptEntry {
+    role: 'user' | 'model' | 'system';
+    text: string;
+    timestamp: number;
+}
+
+// PREMIUM MONOCHROME HTML GENERATOR
+const generateEmailHtml = (
+    history: TranscriptEntry[], 
+    durationSeconds: number, 
+    persona: Persona,
+    sessionId: string
+): string => {
+    const date = new Date().toLocaleString('en-ZA');
+    
+    // CSS Inlining for Email Compatibility
+    const style = {
+        container: `background-color: #000000; color: #e5e5e5; font-family: 'Courier New', Courier, monospace; padding: 40px; line-height: 1.5; width: 100%; max-width: 800px; margin: 0 auto;`,
+        header: `border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;`,
+        title: `font-size: 24px; letter-spacing: 2px; font-weight: bold; color: #fff; margin: 0;`,
+        subtitle: `font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px;`,
+        metaGrid: `display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; border: 1px solid #222; padding: 20px; background: #050505;`,
+        metaLabel: `font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;`,
+        metaValue: `font-size: 14px; color: #fff; font-weight: bold;`,
+        transcriptBox: `border-left: 1px solid #333; padding-left: 20px;`,
+        entry: `margin-bottom: 20px;`,
+        roleUser: `color: #888; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; text-align: right;`,
+        roleModel: `color: #fff; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;`,
+        textUser: `color: #aaa; text-align: right; font-style: italic;`,
+        textModel: `color: #fff;`,
+        footer: `margin-top: 50px; border-top: 1px solid #333; padding-top: 20px; font-size: 10px; color: #444; text-align: center;`
+    };
+
+    const transcriptRows = history.map(entry => {
+        const time = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
+        const isUser = entry.role === 'user';
+        
+        return `
+            <div style="${style.entry}">
+                <div style="${isUser ? style.roleUser : style.roleModel}">
+                    [${time}] ${isUser ? 'CLIENT' : `AGENT (${persona.name.toUpperCase()})`}
+                </div>
+                <div style="${isUser ? style.textUser : style.textModel}">
+                    ${entry.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <body style="margin: 0; padding: 0; background-color: #111;">
+        <div style="${style.container}">
+            
+            <!-- HEADER -->
+            <div style="${style.header}">
+                <div>
+                    <h1 style="${style.title}">VCB-AI // TRANSCRIPT</h1>
+                    <p style="${style.subtitle}">Neural Engine Interaction Log</p>
+                </div>
+                <div style="text-align: right;">
+                    <span style="display: inline-block; padding: 4px 8px; border: 1px solid #fff; font-size: 10px;">CONFIDENTIAL</span>
+                </div>
+            </div>
+
+            <!-- METADATA -->
+            <div style="background-color: #050505; border: 1px solid #222; padding: 20px; margin-bottom: 40px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding-bottom: 15px; width: 50%;">
+                            <span style="${style.metaLabel}">SESSION ID</span>
+                            <span style="${style.metaValue}">${sessionId}</span>
+                        </td>
+                        <td style="padding-bottom: 15px; width: 50%;">
+                            <span style="${style.metaLabel}">DATE</span>
+                            <span style="${style.metaValue}">${date}</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%;">
+                            <span style="${style.metaLabel}">AGENT</span>
+                            <span style="${style.metaValue}">${persona.name} (${persona.role})</span>
+                        </td>
+                        <td style="width: 50%;">
+                            <span style="${style.metaLabel}">DURATION</span>
+                            <span style="${style.metaValue}">${Math.round(durationSeconds)} SECONDS</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- TRANSCRIPT -->
+            <div style="${style.transcriptBox}">
+                ${transcriptRows}
+            </div>
+
+            <!-- FOOTER -->
+            <div style="${style.footer}">
+                GENERATED BY BUA X1 NEURAL ENGINE<br/>
+                SECURED BY VCB-AI INFRASTRUCTURE<br/>
+                UID: ${sessionId}
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
+export const sendTranscriptEmail = async (
+    history: TranscriptEntry[],
+    durationMs: number,
+    persona: Persona,
+    sessionId: string
+): Promise<boolean> => {
+    
+    // 1. Generate the Premium HTML
+    const htmlBody = generateEmailHtml(history, durationMs / 1000, persona, sessionId);
+
+    // 2. Fetch Config with Fallbacks
+    const serviceId = process.env.EMAILJS_SERVICE_ID || "infosec-ai-email";
+    const templateId = process.env.EMAILJS_TEMPLATE_ID || "template_g2mkkbt";
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY || "infosec-id";
+
+    if (!serviceId || !templateId || !publicKey) {
+        console.warn("⚠️ [Email Service] EmailJS Configuration missing. Transcript generated but cannot be sent.");
+        return false;
+    }
+
+    const templateParams = {
+        to_email: "tommy@vcb-ai.online",
+        subject: `[TRANSCRIPT] ${persona.name} - ${new Date().toLocaleString()}`,
+        // Note: In EmailJS template, you must use {{{transcript_html}}} (triple braces) 
+        // to render this as HTML instead of plain text.
+        transcript_html: htmlBody, 
+        duration: Math.round(durationMs / 1000) + "s",
+        agent_name: persona.name,
+        session_id: sessionId
+    };
+
+    console.groupCollapsed("📧 [Email Service] Dispatching via EmailJS");
+    console.log("Service ID:", serviceId);
+    console.log("Template Params:", templateParams);
+    console.groupEnd();
+
+    try {
+        await emailjs.send(serviceId, templateId, templateParams, publicKey);
+        console.log("✅ [Email Service] Sent Successfully.");
+        return true;
+    } catch (error) {
+        console.error("❌ [Email Service] Failed to send:", error);
+        return false;
+    }
+};
