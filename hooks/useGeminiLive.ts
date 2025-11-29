@@ -53,8 +53,15 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  
+  // Audio Controls
   const [isMuted, setIsMuted] = useState(false);
   const [isMicMuted, setIsMicMuted] = useState(false);
+  
+  // PTT Controls
+  const [isPttMode, setIsPttMode] = useState(false);
+  const isPttActiveRef = useRef(false);
+
   const [timeLeft, setTimeLeft] = useState(120);
   const [transcriptSent, setTranscriptSent] = useState(false);
 
@@ -71,6 +78,10 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   
+  // AGC Refs
+  const makeupGainRef = useRef<GainNode | null>(null);
+  const noiseGateRef = useRef<DynamicsCompressorNode | null>(null);
+  
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
   
@@ -80,8 +91,11 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
   
   const demoTimerRef = useRef<number | null>(null);
   const personaRef = useRef<Persona>(persona);
+  
+  // Mirror refs for usage inside callbacks/Worklet
   const isMutedRef = useRef(isMuted);
   const isMicMutedRef = useRef(isMicMuted);
+  const isPttModeRef = useRef(isPttMode);
   const userEmailRef = useRef(userEmail);
   
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
@@ -110,6 +124,10 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
   }, [status]);
 
   useEffect(() => {
+    isPttModeRef.current = isPttMode;
+  }, [isPttMode]);
+
+  useEffect(() => {
     isMutedRef.current = isMuted;
     if (gainNodeRef.current && gainNodeRef.current.context) {
         const ctx = gainNodeRef.current.context;
@@ -121,6 +139,51 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
     isMicMutedRef.current = isMicMuted;
   }, [isMicMuted]);
 
+  // AGC & Noise Gate Calibration Loop
+  useEffect(() => {
+      if (!inputAnalyserRef.current || !makeupGainRef.current || !noiseGateRef.current) return;
+      
+      const buffer = new Uint8Array(inputAnalyserRef.current.frequencyBinCount);
+      
+      const interval = setInterval(() => {
+          if (isMicMutedRef.current) return;
+          
+          // @ts-ignore
+          inputAnalyserRef.current.getByteTimeDomainData(buffer);
+          
+          // Calculate RMS
+          let sum = 0;
+          for(let i = 0; i < buffer.length; i++) {
+              const x = (buffer[i] - 128) / 128.0;
+              sum += x * x;
+          }
+          const rms = Math.sqrt(sum / buffer.length);
+          
+          // AGC Logic
+          if (makeupGainRef.current && noiseGateRef.current) {
+               // 1. Boost quiet voices (RMS < 0.05)
+               if (rms > 0.01 && rms < 0.05) {
+                   const currentGain = makeupGainRef.current.gain.value;
+                   if (currentGain < 3.0) {
+                       makeupGainRef.current.gain.setTargetAtTime(currentGain + 0.1, inputContextRef.current!.currentTime, 0.5);
+                   }
+               } 
+               // 2. Clamp loud voices
+               else if (rms > 0.3) {
+                   makeupGainRef.current.gain.setTargetAtTime(1.0, inputContextRef.current!.currentTime, 0.1);
+               }
+
+               // 3. Adaptive Noise Gate
+               // If very quiet (RMS < 0.005), tighten gate
+               if (rms < 0.005) {
+                   noiseGateRef.current.threshold.setTargetAtTime(-50, inputContextRef.current!.currentTime, 1);
+               }
+          }
+      }, 500);
+
+      return () => clearInterval(interval);
+  }, [status]);
+
   const toggleMute = useCallback(() => {
     setIsMuted(prev => !prev);
   }, []);
@@ -128,9 +191,21 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
   const toggleMic = useCallback(() => {
     setIsMicMuted(prev => !prev);
   }, []);
+  
+  const setPttMode = useCallback((enabled: boolean) => {
+      setIsPttMode(enabled);
+      dispatchLog('info', 'Input Mode Changed', enabled ? 'Push-to-Talk (PTT)' : 'Voice Activity (VAD)');
+  }, []);
+
+  const setPttActive = useCallback((active: boolean) => {
+      isPttActiveRef.current = active;
+  }, []);
 
   const dispatchTranscript = useCallback(async () => {
     const duration = Date.now() - connectStartTimeRef.current;
+    
+    // Clear persisted backup
+    try { localStorage.removeItem('bua_transcript_backup'); } catch(e) {}
     
     if (duration > 20000 && conversationHistoryRef.current.length > 0) {
         dispatchLog('action', 'Tripswitch Activated', `Duration: ${Math.round(duration/1000)}s`);
@@ -190,7 +265,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
       sourceRef.current = null;
     }
     
-    [gainNodeRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
+    [gainNodeRef, inputAnalyserRef, outputAnalyserRef, makeupGainRef, noiseGateRef].forEach(ref => {
         if (ref.current) {
             try { ref.current.disconnect(); } catch(e) {}
         }
@@ -354,6 +429,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
       noiseGate.ratio.value = 15; // Aggressive gating
       noiseGate.attack.value = 0;
       noiseGate.release.value = 0.1;
+      noiseGateRef.current = noiseGate;
 
       // 4. Dynamic Leveler (Soft Compressor)
       // Normalizes voice levels
@@ -368,6 +444,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
       // Boosts the clean, filtered signal
       const makeupGain = inputCtx.createGain();
       makeupGain.gain.value = 1.2;
+      makeupGainRef.current = makeupGain;
 
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
@@ -459,6 +536,15 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
                             AUDIO_CONFIG.outputSampleRate,
                             1
                         );
+                        
+                        // PERSIST TRANSCRIPT on every AI Speech
+                        // This saves the transcript to LocalStorage in case of browser crash
+                        try {
+                            localStorage.setItem('bua_transcript_backup', JSON.stringify({
+                                timestamp: Date.now(),
+                                history: conversationHistoryRef.current
+                            }));
+                        } catch(e) {}
                         
                         nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
                         
@@ -597,17 +683,25 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
       workletNode.port.onmessage = (event) => {
           if (isConnectedRef.current && !isMicMutedRef.current) {
                const inputBuffer = event.data;
-               // Use configurable threshold for VAD (Default raised to 0.02)
-               if (hasSpeech(inputBuffer, speechThreshold)) lastUserSpeechTimeRef.current = Date.now();
-               const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
-               
-               sessionPromise.then(session => {
-                   if(isConnectedRef.current) {
-                        try {
-                           session.sendRealtimeInput({ media: pcmBlob });
-                        } catch(e) {}
-                   }
-               }).catch(e => {});
+               // PTT LOGIC:
+               // If PTT Mode is ON: Only send if isPttActive is TRUE
+               // If PTT Mode is OFF: Use VAD (hasSpeech)
+               const shouldTransmit = isPttModeRef.current 
+                    ? isPttActiveRef.current 
+                    : hasSpeech(inputBuffer, speechThreshold);
+
+               if (shouldTransmit) {
+                   lastUserSpeechTimeRef.current = Date.now();
+                   const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
+                   
+                   sessionPromise.then(session => {
+                       if(isConnectedRef.current) {
+                            try {
+                               session.sendRealtimeInput({ media: pcmBlob });
+                            } catch(e) {}
+                       }
+                   }).catch(e => {});
+               }
           }
       };
 
@@ -641,6 +735,9 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEma
     isMicMuted,
     toggleMic,
     timeLeft,
-    transcriptSent
+    transcriptSent,
+    isPttMode,
+    setPttMode,
+    setPttActive
   };
 }
