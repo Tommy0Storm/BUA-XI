@@ -1,3 +1,4 @@
+
 import emailjs from '@emailjs/browser';
 import { Persona } from '../types';
 
@@ -131,7 +132,7 @@ export const sendTranscriptEmail = async (
     }
 
     const templateParams = {
-        to_email: "tommy@vcb-ai.online",
+        email: "tommy@vcb-ai.online", // Changed to match {{email}} in template
         subject: `[TRANSCRIPT] ${persona.name} - ${new Date().toLocaleString()}`,
         // Note: In EmailJS template, you must use {{{transcript_html}}} (triple braces) 
         // to render this as HTML instead of plain text.
@@ -157,6 +158,11 @@ export const sendTranscriptEmail = async (
         // Extract exact error text
         const errorMsg = error?.text || error?.message || JSON.stringify(error);
         console.error("❌ [Email Service] Failed to send. Server responded:", errorMsg);
+        
+        if (errorMsg.includes("recipients address is empty")) {
+            console.warn("⚠️ FIX: Go to EmailJS Dashboard > Email Templates. Click your template. Click the 'To Email' field. Enter {{email}}. Save.");
+        }
+
         return false;
     }
 };
