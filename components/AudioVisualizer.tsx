@@ -66,7 +66,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     history: new Float32Array(HIST_LEN), // Circular buffer (O(1)) instead of Array (O(N))
     historyHead: 0, // Pointer to current head of circular buffer
     lastVolume: 0,
-    sourceMix: 0 // 0 = Persona, 1 = User
+    sourceMix: 0, // 0 = Persona, 1 = User
+    standbyPhase: 0
   });
 
   useEffect(() => {
@@ -183,7 +184,15 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       // Sensitivity Boost
       maxVol = maxVol * 3.5; 
 
-      const targetVolume = isActive ? Math.max(0.01, maxVol) : 0.01;
+      // Standby Animation (Breathing) when silence
+      let targetVolume = isActive ? Math.max(0.01, maxVol) : 0.01;
+      
+      if (isActive && maxVol < 0.05) {
+          state.standbyPhase += 0.05;
+          const breath = (Math.sin(state.standbyPhase) + 1) * 0.02; // Gentle pulse 0.00 to 0.04
+          targetVolume += breath;
+      }
+
       const lerpFactor = targetVolume > state.smoothedVolume ? 0.2 : 0.08; 
       state.smoothedVolume += (targetVolume - state.smoothedVolume) * lerpFactor;
       
