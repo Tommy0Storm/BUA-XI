@@ -482,7 +482,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 }
 
                 // Handle Tool Calls (Language Detection)
-                if (msg.toolCall && msg.toolCall.functionCalls) {
+                // Fix TS18048: Check if functionCalls exists before iterating
+                if (msg.toolCall?.functionCalls) {
                    for (const call of msg.toolCall.functionCalls) {
                        if (call.name === 'report_language_change') {
                            const lang = (call.args as any).language;
