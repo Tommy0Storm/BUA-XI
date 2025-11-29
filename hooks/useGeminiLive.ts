@@ -390,15 +390,18 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         console.error("[BuaX1] AudioWorklet init failed:", err);
         throw new Error(`Failed to initialize Audio Worklet: ${err.message}`);
       } finally {
-        URL.revokeObjectURL(workletUrl); // Cleanup memory immediately
+        // Critical: Revoke URL to release memory, but only after loading attempt
+        URL.revokeObjectURL(workletUrl); 
       }
       
       workletNodeRef.current = workletNode;
       
       workletNode.onprocessorerror = (err) => {
         console.error('[BuaX1] Worklet Processor Error:', err);
-        // If the processor crashes, we should probably attempt a reconnect or stop
-        // For now, we log it.
+        // If the processor crashes, we can attempt to disconnect gracefully
+        if (isConnectedRef.current) {
+            disconnect('Audio processor crashed. Please reconnect.');
+        }
       };
       
       inputAnalyser.connect(workletNode);
@@ -450,7 +453,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 if (audioData) {
                     try {
                         const audioBuffer = await decodeAudioData(
-                            base64ToUint8Array(audioData) as any, // Cast to any to fix type mismatch
+                            base64ToUint8Array(audioData) as any, // Cast to any to fix Uint8Array<ArrayBuffer> mismatch
                             outputCtx,
                             AUDIO_CONFIG.outputSampleRate,
                             1
@@ -562,6 +565,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     console.warn('[BuaX1] Session closed unexpectedly:', e);
                     
                     // Exponential Backoff Logic: 1s, 2s, 4s, 8s... capped at 10s
+                    // Base 1000ms * 2^retryCount. 
                     const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
                     retryCountRef.current += 1;
                     
