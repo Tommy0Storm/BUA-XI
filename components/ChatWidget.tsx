@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
@@ -28,13 +29,12 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
 // 2. Sentence Parser for Cinematic Transcript
 const getLastSentence = (text: string): string => {
     if (!text) return "";
-    // Match the last complete sentence or the trailing fragment
     const matches = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
     if (!matches || matches.length === 0) return text;
     return matches[matches.length - 1].trim();
 };
 
-// 3. Control Button Component (Voice UI Kit Style)
+// 3. Control Button Component
 interface ControlBtnProps {
     active: boolean; 
     onClick: () => void; 
@@ -52,7 +52,7 @@ const ControlBtn: React.FC<ControlBtnProps> = ({
 }) => {
     const baseClass = "h-12 w-12 rounded-full flex items-center justify-center transition-all duration-200 relative group active:scale-95";
     
-    let colorClass = "bg-gray-800 text-white hover:bg-gray-700"; // Default Off
+    let colorClass = "bg-gray-800 text-white hover:bg-gray-700"; 
     
     if (variant === 'danger') {
         colorClass = "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20";
@@ -87,7 +87,7 @@ export const ChatWidget: React.FC = () => {
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
 
-  const { status, connect, disconnect, volume, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent } = useGeminiLive({
+  const { status, connect, disconnect, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
   });
@@ -107,7 +107,6 @@ export const ChatWidget: React.FC = () => {
     setSelectedPersonaId(id);
   };
 
-  // --- AUDIO PREVIEW LOGIC ---
   const playPreview = (personaId: string, gender: string, e: React.MouseEvent) => {
       e.stopPropagation(); 
       if (playingPreview) return;
@@ -154,7 +153,7 @@ export const ChatWidget: React.FC = () => {
              {/* Main Container - The "Stage" */}
              <div className="w-[24rem] h-[38rem] bg-[#09090b] rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col border border-white/10 ring-1 ring-black/50">
                 
-                {/* 1. Voice Header (Status) */}
+                {/* 1. Voice Header */}
                 <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent pointer-events-none">
                     <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 shadow-sm">
                         <div className={`w-2 h-2 rounded-full ${status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
@@ -177,8 +176,9 @@ export const ChatWidget: React.FC = () => {
                      <div className="relative w-72 h-72 flex items-center justify-center">
                          <div className="absolute inset-0">
                              <AudioVisualizer 
-                                 isActive={!isMicMuted && status === 'connected'} 
-                                 volume={volume} 
+                                 isActive={status === 'connected'} 
+                                 inputAnalyser={inputAnalyserRef.current}
+                                 outputAnalyser={outputAnalyserRef.current}
                                  mode="circle"
                                  color={selectedPersona.gender === 'Male' ? '#10b981' : '#f59e0b'} 
                              />
@@ -207,11 +207,10 @@ export const ChatWidget: React.FC = () => {
                      </div>
                 </div>
 
-                {/* 3. Voice Control Bar (Capsule) */}
+                {/* 3. Voice Control Bar */}
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full flex justify-center">
                      <div className="flex items-center gap-2 px-3 py-2 bg-[#18181b]/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl ring-1 ring-black/50">
                          
-                         {/* Mic Toggle */}
                          <ControlBtn 
                             active={!isMicMuted}
                             onClick={toggleMic}
@@ -220,7 +219,6 @@ export const ChatWidget: React.FC = () => {
                             label={isMicMuted ? "Unmute" : "Mute"}
                          />
 
-                         {/* Captions Toggle */}
                          <ControlBtn 
                             active={showCaptions}
                             onClick={() => setShowCaptions(!showCaptions)}
@@ -231,7 +229,6 @@ export const ChatWidget: React.FC = () => {
 
                          <div className="w-px h-8 bg-white/10 mx-1"></div>
 
-                         {/* Disconnect (Danger) */}
                          <ControlBtn 
                             active={true}
                             onClick={() => disconnect()}
@@ -251,7 +248,6 @@ export const ChatWidget: React.FC = () => {
   return (
     <div className="font-sans">
       
-      {/* Transcript Notification Pill */}
       {transcriptSent && (
           <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-fade-in-down pointer-events-none">
               <div className="bg-[#18181b] text-white pl-4 pr-6 py-2.5 rounded-full shadow-2xl border border-white/10 flex items-center gap-3">
@@ -266,17 +262,14 @@ export const ChatWidget: React.FC = () => {
           </div>
       )}
 
-      {/* Backdrop */}
       {isOpen && status !== 'connected' && status !== 'connecting' && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={toggleWidget}></div>
       )}
 
-      {/* Launcher Modal */}
       {isOpen && status !== 'connected' && status !== 'connecting' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
           <div className="pointer-events-auto bg-[#FAFAFA] w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-300 border border-white/50">
             
-            {/* Launcher Header */}
             <div className="bg-white border-b border-gray-100 p-6 flex justify-between items-start">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -293,7 +286,6 @@ export const ChatWidget: React.FC = () => {
                 </button>
             </div>
 
-            {/* Error State */}
             {status === 'error' && (
                 <div className="absolute inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center p-8">
                      <div className="text-center">
@@ -309,7 +301,6 @@ export const ChatWidget: React.FC = () => {
                 </div>
             )}
 
-            {/* Agent Grid */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-24">
                     {PERSONAS.map(persona => {
@@ -357,7 +348,6 @@ export const ChatWidget: React.FC = () => {
                 </div>
             </div>
 
-            {/* Sticky Footer Action */}
             <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 z-20 pointer-events-none">
                  <div className="max-w-xl mx-auto pointer-events-auto">
                     <button
@@ -377,7 +367,6 @@ export const ChatWidget: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Trigger Pill */}
       {!isOpen && (
         <div className="fixed bottom-8 right-8 z-50">
             <button
