@@ -102,6 +102,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   // Synchronous Gate: strictly tracks if we believe the socket is open
   const isConnectedRef = useRef<boolean>(false);
   
+  // Retry Logic for recursive connection
+  const connectRef = useRef<((isRetry?: boolean) => Promise<void>) | null>(null);
+
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
@@ -250,7 +253,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     stopAudio();
   }, [stopAudio, dispatchTranscript]);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (isRetry = false) => {
     if (apiKeys.length === 0) {
       setError('API Key is missing.');
       setStatus('error');
@@ -349,15 +352,34 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       
       source.connect(inputAnalyser);
 
-      const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
+      // 3. Audio Worklet - Robust Loading
+      const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
       const workletUrl = URL.createObjectURL(blob);
-      await inputCtx.audioWorklet.addModule(workletUrl);
+      
+      try {
+        await inputCtx.audioWorklet.addModule(workletUrl);
+      } catch (err: any) {
+        throw new Error(`Failed to load audio worklet: ${err.message}`);
+      } finally {
+        URL.revokeObjectURL(workletUrl); // Cleanup memory
+      }
       
       const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
       workletNodeRef.current = workletNode;
       
+      workletNode.onprocessorerror = (err) => {
+        console.error('[BuaX1] Worklet Processor Error:', err);
+        // Don't disconnect immediately for minor glitches, but log it.
+        // If it stops processing, the session will time out via silence detection eventually.
+      };
+      
       inputAnalyser.connect(workletNode);
-      workletNode.connect(inputCtx.destination);
+      // Connect to gain 0 to keep graph alive but mute local feedback
+      const nullGain = inputCtx.createGain();
+      nullGain.gain.value = 0;
+      workletNode.connect(nullGain);
+      nullGain.connect(inputCtx.destination);
+
 
       // --- GEMINI API CONNECTION ---
       const ai = new GoogleGenAI({ apiKey: currentKey });
@@ -371,8 +393,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             },
             systemInstruction: currentPersona.baseInstruction,
             tools: LANGUAGE_TOOL,
-            inputAudioTranscription: { model: 'gemini-2.5-flash-native-audio-preview-09-2025' },
-            outputAudioTranscription: { model: 'gemini-2.5-flash-native-audio-preview-09-2025' }
+            inputAudioTranscription: {}, // Correct empty object for enablement
+            outputAudioTranscription: {}  // Correct empty object for enablement
         },
         callbacks: {
             onopen: () => {
@@ -459,7 +481,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 }
 
                 // Handle Tool Calls (Language Detection)
-                if (msg.toolCall) {
+                // TypeScript Fix: Ensure functionCalls exists before iterating
+                if (msg.toolCall && msg.toolCall.functionCalls) {
                    for (const call of msg.toolCall.functionCalls) {
                        if (call.name === 'report_language_change') {
                            const lang = (call.args as any).language;
@@ -488,14 +511,34 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 }
             },
             onclose: (e) => {
+                 // Immediate Disconnect Handling (Quota/Key issues)
+                 const duration = Date.now() - connectStartTimeRef.current;
+                 const wasClean = !e.wasClean; // e.wasClean is usually false for errors
+                 
+                 // If connection died instantly (< 4s), it's likely a bad key or quota limit
+                 if (duration < 4000 && apiKeys.length > 1 && !isIntentionalDisconnectRef.current) {
+                     console.warn(`[BuaX1] Immediate disconnect detected (Quota?). Rotating API Key from index ${currentKeyIndexRef.current} to ${currentKeyIndexRef.current + 1}`);
+                     
+                     // Rotate Key
+                     currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
+                     
+                     // Safe Recursive Retry
+                     setTimeout(() => {
+                         if (connectRef.current) connectRef.current(true);
+                     }, 1000); 
+                     return;
+                 }
+
                 if (!isIntentionalDisconnectRef.current) {
                     console.warn('[BuaX1] Session closed unexpectedly:', e);
-                    disconnect(); 
+                    disconnect("Connection lost."); 
                 }
             },
             onerror: (err) => {
                  console.error('[BuaX1] Session Error:', err);
-                 disconnect(err.message);
+                 // Don't disconnect here immediately if onclose handles it, 
+                 // but for safety, ensure we catch it.
+                 isConnectedRef.current = false;
             }
         }
       });
@@ -512,8 +555,16 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
                const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
                
+               // Use sessionPromise directly to ensure we use the active socket
                sessionPromise.then(session => {
-                   session.sendRealtimeInput({ media: pcmBlob });
+                   // Double check gate before sending
+                   if(isConnectedRef.current) {
+                        try {
+                           session.sendRealtimeInput({ media: pcmBlob });
+                        } catch(e) {
+                            // Suppress "WebSocket is already in CLOSING" errors
+                        }
+                   }
                }).catch(e => {
                    // ignore send errors
                });
@@ -527,6 +578,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         stopAudio();
     }
   }, [apiKeys, persona, stopAudio, disconnect]);
+
+  // Assign ref for recursive calls
+  useEffect(() => {
+      connectRef.current = connect;
+  }, [connect]);
 
   // Clean up on unmount
   useEffect(() => {
