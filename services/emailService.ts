@@ -125,6 +125,11 @@ export const sendTranscriptEmail = async (
     const templateId = process.env.EMAILJS_TEMPLATE_ID || "template_g2mkkbt";
     const publicKey = process.env.EMAILJS_PUBLIC_KEY || "infosec-id";
 
+    // Debug Check
+    if (publicKey === "infosec-id") {
+        console.error("❌ [Email Service] 'infosec-id' appears to be a placeholder name, not a valid Public Key. Please check your EmailJS Dashboard -> Account -> API Keys.");
+    }
+
     if (!serviceId || !templateId || !publicKey) {
         console.warn("⚠️ [Email Service] EmailJS Configuration missing. Transcript generated but cannot be sent.");
         return false;
@@ -147,11 +152,16 @@ export const sendTranscriptEmail = async (
     console.groupEnd();
 
     try {
+        // Explicit init helps in some environments
+        emailjs.init(publicKey);
+        
         await emailjs.send(serviceId, templateId, templateParams, publicKey);
         console.log("✅ [Email Service] Sent Successfully.");
         return true;
-    } catch (error) {
-        console.error("❌ [Email Service] Failed to send:", error);
+    } catch (error: any) {
+        // Extract exact error text
+        const errorMsg = error?.text || error?.message || JSON.stringify(error);
+        console.error("❌ [Email Service] Failed to send. Server responded:", errorMsg);
         return false;
     }
 };
