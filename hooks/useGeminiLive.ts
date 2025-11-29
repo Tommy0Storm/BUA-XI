@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
@@ -10,6 +9,7 @@ import { dispatchLog } from '../utils/consoleUtils';
 export interface UseGeminiLiveProps {
   apiKey: string | undefined;
   persona: Persona;
+  speechThreshold?: number; // Configurable VAD threshold
 }
 
 const VOLUME_GAIN = 1.5;
@@ -46,7 +46,7 @@ interface TranscriptEntry {
     timestamp: number;
 }
 
-export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
+export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01 }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
@@ -505,7 +505,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       workletNode.port.onmessage = (event) => {
           if (isConnectedRef.current && !isMicMutedRef.current) {
                const inputBuffer = event.data;
-               if (hasSpeech(inputBuffer)) lastUserSpeechTimeRef.current = Date.now();
+               // Use configurable threshold for VAD
+               if (hasSpeech(inputBuffer, speechThreshold)) lastUserSpeechTimeRef.current = Date.now();
                const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
                
                sessionPromise.then(session => {
@@ -524,7 +525,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         setError(err.message || "Failed to connect");
         stopAudio();
     }
-  }, [apiKeys, persona, stopAudio, disconnect]);
+  }, [apiKeys, persona, stopAudio, disconnect, speechThreshold]);
 
   useEffect(() => {
       connectRef.current = connect;
