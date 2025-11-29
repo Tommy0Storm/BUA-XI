@@ -457,7 +457,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     // 1. Synchronous Gate Check
                     if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
 
-                    const inputData = event.data; // Float32Array from worklet
+                    const inputData = event.data as Float32Array; // Explicit cast
 
                     // Mute logic: Zero out the buffer if mic is muted
                     if (isMicMutedRef.current) {
@@ -579,7 +579,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
              if (audioData && outputCtx && gainNodeRef.current && outputCtx.state !== 'closed') {
                  try {
                     const rawBytes = base64ToUint8Array(audioData);
-                    const audioBuffer = await decodeAudioData(rawBytes, outputCtx, AUDIO_CONFIG.outputSampleRate, 1);
+                    // Cast to any to avoid "Uint8Array<ArrayBufferLike> not assignable to Uint8Array<ArrayBuffer>"
+                    const audioBuffer = await decodeAudioData(rawBytes as any, outputCtx, AUDIO_CONFIG.outputSampleRate, 1);
 
                     if (currentEpoch !== interruptionEpochRef.current) return;
 
