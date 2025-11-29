@@ -156,14 +156,14 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
     isConnectedRef.current = false;
     connectionIdRef.current = null;
     
+    // Strict Worklet Disposal
     if (workletNodeRef.current) {
-        // Remove event listeners
         workletNodeRef.current.port.onmessage = null;
         workletNodeRef.current.onprocessorerror = null;
         try { 
           workletNodeRef.current.disconnect(); 
         } catch(e) {
-          // Ignore disconnect errors
+          // Ignore disconnect errors if graph is already broken
         }
         workletNodeRef.current = null;
     }
@@ -288,7 +288,8 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
       inputContextRef.current = inputCtx;
       nextStartTimeRef.current = outputCtx.currentTime;
 
-      // Output DSP Chain
+      // --- OUTPUT DSP CHAIN ---
+      // Dynamics Compressor to normalize output volume
       const compressor = outputCtx.createDynamicsCompressor();
       compressor.threshold.value = -20;
       compressor.knee.value = 30;
@@ -314,40 +315,52 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
             sampleRate: AUDIO_CONFIG.inputSampleRate,
             channelCount: 1,
             echoCancellation: true,
-            autoGainControl: true,
-            noiseSuppression: true
+            autoGainControl: true, // Hardware AGC
+            noiseSuppression: true // Hardware NS
         } 
       });
       streamRef.current = stream;
 
-      // Input DSP Chain
+      // --- INPUT DSP CHAIN ---
       const source = inputCtx.createMediaStreamSource(stream);
       sourceRef.current = source;
       
-      // 1. High Pass Filter (Remove Rumble)
+      // 1. High Pass Filter (Remove Rumble/Low Freq Noise)
       const highPassFilter = inputCtx.createBiquadFilter();
       highPassFilter.type = 'highpass';
-      highPassFilter.frequency.value = 85; // 85Hz cutoff for voice clarity
+      highPassFilter.frequency.value = 85; // Standard cutoff for human voice
       highPassFilter.Q.value = 0.5;
 
-      // 2. Noise Gate (DynamicsCompressor)
+      // 2. Dynamic Input Leveler (Soft Compressor)
+      // Boosts quiet voices, limits loud ones.
+      const inputLeveler = inputCtx.createDynamicsCompressor();
+      inputLeveler.threshold.value = -24;
+      inputLeveler.knee.value = 30;
+      inputLeveler.ratio.value = 3; // Gentle ratio for leveling
+      inputLeveler.attack.value = 0.003;
+      inputLeveler.release.value = 0.25;
+
+      // 3. Noise Gate (Hard Compressor)
+      // Clamps down when volume is very low to remove hiss
       const noiseGate = inputCtx.createDynamicsCompressor();
-      noiseGate.threshold.value = -50;
+      noiseGate.threshold.value = -50; 
       noiseGate.knee.value = 40;
-      noiseGate.ratio.value = 12; // High ratio acts as soft gate
+      noiseGate.ratio.value = 20; // High ratio acts as a gate
       noiseGate.attack.value = 0;
-      noiseGate.release.value = 0.25;
+      noiseGate.release.value = 0.1;
 
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
       inputAnalyser.smoothingTimeConstant = 0.5;
       inputAnalyserRef.current = inputAnalyser;
 
+      // Connect Chain: Source -> HPF -> Leveler -> Gate -> Analyser -> Worklet
       source.connect(highPassFilter);
-      highPassFilter.connect(noiseGate);
+      highPassFilter.connect(inputLeveler);
+      inputLeveler.connect(noiseGate);
       noiseGate.connect(inputAnalyser);
 
-      // Worklet Loading with Strict Disposal
+      // Worklet Loading with Cross-Browser Compatibility
       const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
       const workletUrl = URL.createObjectURL(blob);
       let workletNode: AudioWorkletNode;
@@ -356,10 +369,10 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
         await inputCtx.audioWorklet.addModule(workletUrl);
         workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
       } catch (err: any) {
-        dispatchLog('error', 'Audio Subsystem Failed', err.message);
+        dispatchLog('error', 'Audio Worklet Init Failed', err.message);
         throw new Error(`Failed to initialize Audio Worklet: ${err.message}`);
       } finally {
-        // Clean up blob URL immediately
+        // Explicitly revoke to prevent memory leak
         URL.revokeObjectURL(workletUrl); 
       }
       
@@ -418,7 +431,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                 if (audioData) {
                     try {
                         const audioBuffer = await decodeAudioData(
-                            base64ToUint8Array(audioData) as any, // Cast to any to fix Uint8Array/ArrayBufferLike mismatch
+                            base64ToUint8Array(audioData) as any, // FIXED: Cast to any to resolve Uint8Array<ArrayBufferLike> type conflict
                             outputCtx,
                             AUDIO_CONFIG.outputSampleRate,
                             1
@@ -438,7 +451,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                         nextStartTimeRef.current += audioBuffer.duration;
                         activeSourcesRef.current.add(source);
                     } catch (e) {
-                        // Suppress decode errors
+                        // Suppress decode errors from partial chunks
                     }
                 }
 
@@ -476,6 +489,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                     }
                 }
 
+                // FIXED: Safe access to toolCall.functionCalls
                 if (msg.toolCall?.functionCalls) {
                    for (const call of msg.toolCall.functionCalls) {
                        if (call.name === 'report_language_change') {
@@ -515,6 +529,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                  }
 
                 if (!isIntentionalDisconnectRef.current) {
+                    // Exponential Backoff: 1s -> 2s -> 4s -> 8s (Max 10s)
                     const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
                     retryCountRef.current += 1;
                     dispatchLog('warn', 'Connection Lost', `Auto-reconnecting in ${backoffDelay}ms...`);
