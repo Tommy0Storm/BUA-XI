@@ -120,15 +120,10 @@ export const sendTranscriptEmail = async (
     // 1. Generate the Premium HTML
     const htmlBody = generateEmailHtml(history, durationMs / 1000, persona, sessionId);
 
-    // 2. Fetch Config with Fallbacks
-    const serviceId = process.env.EMAILJS_SERVICE_ID || "infosec-ai-email";
+    // 2. Fetch Config with Fallbacks (Updated with Provided Keys)
+    const serviceId = process.env.EMAILJS_SERVICE_ID || "service_q6alymo";
     const templateId = process.env.EMAILJS_TEMPLATE_ID || "template_g2mkkbt";
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY || "infosec-id";
-
-    // Debug Check
-    if (publicKey === "infosec-id") {
-        console.error("❌ [Email Service] 'infosec-id' appears to be a placeholder name, not a valid Public Key. Please check your EmailJS Dashboard -> Account -> API Keys.");
-    }
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY || "X3-SgWtuwD4MjfxX2";
 
     if (!serviceId || !templateId || !publicKey) {
         console.warn("⚠️ [Email Service] EmailJS Configuration missing. Transcript generated but cannot be sent.");
