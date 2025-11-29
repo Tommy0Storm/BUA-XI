@@ -48,7 +48,7 @@ interface TranscriptEntry {
     timestamp: number;
 }
 
-export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEmail }: UseGeminiLiveProps) {
+export function useGeminiLive({ apiKey, persona, speechThreshold = 0.02, userEmail }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
@@ -424,7 +424,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                 voiceConfig: { prebuiltVoiceConfig: { voiceName: currentPersona.voiceName } }
             },
             systemInstruction: currentPersona.baseInstruction,
-            // Updated Tools to include both Language and Email functions
+            // Updated Tools to include both Language, Email functions AND Google Search
             tools: LIVE_API_TOOLS,
             inputAudioTranscription: {}, 
             outputAudioTranscription: {}
@@ -597,7 +597,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
       workletNode.port.onmessage = (event) => {
           if (isConnectedRef.current && !isMicMutedRef.current) {
                const inputBuffer = event.data;
-               // Use configurable threshold for VAD
+               // Use configurable threshold for VAD (Default raised to 0.02)
                if (hasSpeech(inputBuffer, speechThreshold)) lastUserSpeechTimeRef.current = Date.now();
                const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
                
