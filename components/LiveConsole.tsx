@@ -38,47 +38,49 @@ export const LiveConsole: React.FC = () => {
     switch (log.type) {
         case 'action':
             return (
-                <div className="bg-blue-500/10 border-l-2 border-blue-500 p-3 rounded-r-md my-2 animate-fade-in-left">
-                    <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-wider mb-1">
-                        <Cpu size={12} />
+                <div className="bg-blue-500/10 border-l-4 border-blue-500 p-4 rounded-r-md my-3 animate-fade-in-left shadow-[0_0_20px_rgba(59,130,246,0.15)] relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-blue-400/5 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 pointer-events-none"></div>
+                    <div className="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-wider mb-2">
+                        <Cpu size={14} className="animate-spin-slow" />
                         EXECUTE PROTOCOL
                     </div>
-                    <div className="text-blue-100 font-medium">{log.message}</div>
-                    {log.detail && <div className="text-blue-400/60 text-xs mt-1 font-mono">{log.detail}</div>}
+                    <div className="text-blue-50 font-semibold text-sm tracking-wide">{log.message}</div>
+                    {log.detail && <div className="text-blue-300/70 text-xs mt-1.5 font-mono bg-black/20 p-2 rounded border border-blue-500/20">{log.detail}</div>}
                 </div>
             );
         case 'success':
             return (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-md my-2 animate-fade-in shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider mb-1">
-                        <CheckCircle2 size={12} />
-                        SUCCESS
+                <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-md my-3 animate-fade-in shadow-[0_0_20px_rgba(16,185,129,0.15)] relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider mb-2">
+                        <CheckCircle2 size={14} />
+                        TRANSMISSION COMPLETE
                     </div>
-                    <div className="text-emerald-100 font-medium">{log.message}</div>
-                    {log.detail && <div className="text-emerald-500/60 text-xs mt-1 font-mono">{log.detail}</div>}
+                    <div className="text-emerald-50 font-semibold text-sm">{log.message}</div>
+                    {log.detail && <div className="text-emerald-400/70 text-xs mt-1.5 font-mono">{log.detail}</div>}
                 </div>
             );
         case 'error':
             return (
-                <div className="bg-red-500/10 border-l-2 border-red-500 p-3 rounded-r-md my-2">
-                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-wider mb-1">
-                        <AlertTriangle size={12} />
+                <div className="bg-red-500/10 border-l-4 border-red-500 p-4 rounded-r-md my-3 animate-shake">
+                    <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-wider mb-2">
+                        <AlertTriangle size={14} />
                         CRITICAL FAILURE
                     </div>
                     <div className="text-red-100 font-medium">{log.message}</div>
-                    {log.detail && <div className="text-red-400/60 text-xs mt-1 font-mono">{log.detail}</div>}
+                    {log.detail && <div className="text-red-400/60 text-xs mt-1.5 font-mono bg-red-950/30 p-2 rounded">{log.detail}</div>}
                 </div>
             );
         default:
             return (
-                <div className="py-1 flex gap-3 hover:bg-white/5 px-2 rounded -mx-2 transition-colors">
+                <div className="py-1 flex gap-3 hover:bg-white/5 px-2 rounded -mx-2 transition-colors border-l-2 border-transparent hover:border-white/10">
                     <span className="text-gray-600 shrink-0 select-none font-mono text-xs pt-0.5">[{log.timestamp}]</span>
                     <div className="break-all">
                         <span className={`font-bold uppercase mr-2 text-[10px] tracking-wider opacity-70 
                             ${log.type === 'warn' ? 'text-yellow-500' : 'text-gray-400'}`}>
                             {log.type}
                         </span>
-                        <span className="text-gray-300">{log.message}</span>
+                        <span className="text-gray-300 text-sm">{log.message}</span>
                         {log.detail && <div className="text-gray-500 text-xs mt-0.5 font-mono pl-2 border-l border-gray-700">{log.detail}</div>}
                     </div>
                 </div>
@@ -87,24 +89,25 @@ export const LiveConsole: React.FC = () => {
   };
 
   return (
-    <div className="relative rounded-[2.5rem] bg-[#09090b] border border-white/10 p-2 shadow-2xl overflow-hidden group hover:scale-[1.01] transition-transform duration-500 w-full h-full min-h-[450px]">
+    <div className="relative rounded-[2.5rem] bg-[#09090b] border border-white/10 p-2 shadow-2xl overflow-hidden group hover:scale-[1.005] transition-transform duration-500 w-full h-full min-h-[500px]">
       {/* Background Grid & Scanlines */}
       <div className="absolute inset-0 bg-grid-white/[0.02] pointer-events-none"></div>
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%]"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 pointer-events-none bg-[length:100%_2px,3px_100%] opacity-50"></div>
       
       {/* Terminal Container */}
-      <div className="bg-black/90 backdrop-blur-xl rounded-[2rem] p-6 h-full flex flex-col relative border border-white/5 z-20">
+      <div className="bg-black/80 backdrop-blur-xl rounded-[2rem] p-6 h-full flex flex-col relative border border-white/5 z-20 shadow-inner">
         
         {/* Header */}
         <div className="flex items-center gap-4 mb-4 border-b border-white/10 pb-4">
            <div className="flex gap-2">
-               <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50"></div>
-               <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
-               <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/50"></div>
+               <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.4)]"></div>
+               <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.4)]"></div>
+               <div className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
            </div>
-           <div className="ml-auto flex items-center gap-3 text-xs font-mono">
+           <div className="ml-auto flex items-center gap-4 text-xs font-mono">
+             <span className="text-gray-500">IP: 192.168.X.X</span>
              <span className="text-gray-500">PORT: 443</span>
-             <span className="flex items-center gap-2 text-emerald-500/80">
+             <span className="flex items-center gap-2 text-emerald-500/80 bg-emerald-500/10 px-2 py-1 rounded">
                 <Activity size={14} className="animate-pulse" />
                 LIVE_STREAM
              </span>
@@ -112,7 +115,7 @@ export const LiveConsole: React.FC = () => {
         </div>
 
         {/* Logs Area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto font-sans text-sm space-y-1 custom-scrollbar pr-2 pb-4 scroll-smooth">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto font-sans space-y-1 custom-scrollbar pr-2 pb-4 scroll-smooth">
            {logs.map((log) => (
              <div key={log.id}>
                 {renderLogContent(log)}
@@ -120,14 +123,14 @@ export const LiveConsole: React.FC = () => {
            ))}
            
            {/* Blinking Cursor */}
-           <div className="flex items-center gap-2 mt-4 text-emerald-500/50 animate-pulse">
+           <div className="flex items-center gap-2 mt-4 text-emerald-500/50 animate-pulse pl-2">
                <ChevronRight size={14} />
                <div className="w-2 h-4 bg-emerald-500/50"></div>
            </div>
         </div>
 
         {/* Floating Status Badge */}
-        <div className="absolute bottom-6 right-6 px-4 py-2 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white rounded-lg font-bold text-xs shadow-xl flex items-center gap-2 ring-1 ring-white/5">
+        <div className="absolute bottom-6 right-6 px-4 py-2 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white rounded-lg font-bold text-xs shadow-xl flex items-center gap-2 ring-1 ring-white/5 z-30">
            <ShieldCheck size={14} className="text-emerald-500" />
            SOC2 COMPLIANT LOGGER
         </div>
