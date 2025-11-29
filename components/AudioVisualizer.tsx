@@ -213,17 +213,21 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
               ctx.stroke();
           }
 
-          // 2. RADIAL AUDIO GRAPH (Low Shadow)
+          // 2. RADIAL AUDIO GRAPH (Optimized)
           const graphRadius = maxRadius * 0.75;
           const histLen = state.history.length;
           const barWidthAngle = (Math.PI * 2) / histLen;
           
           ctx.beginPath();
-          for(let i = 0; i < histLen; i++) {
+          // Optimization: Skip every second point to reduce draw calls by 50%
+          for(let i = 0; i < histLen; i += 2) {
               const val = state.history[i];
+              if (val < 0.01) continue; // Skip near-zero values
+              
               const angle = i * barWidthAngle - Math.PI / 2 + state.rotation;
               const h = val * 40;
               
+              // Simplified Math for coordinates
               const cosA = Math.cos(angle);
               const sinA = Math.sin(angle);
 
