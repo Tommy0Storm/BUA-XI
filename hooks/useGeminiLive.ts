@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
@@ -48,7 +49,6 @@ interface TranscriptEntry {
 
 export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [volume, setVolume] = useState(0);
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -71,14 +71,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  
+  // Public Analyser Refs (Exposed to Visualizer)
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
   
-  // Reusable buffers
-  const inputDataArrayRef = useRef<Uint8Array | null>(null);
-  const outputDataArrayRef = useRef<Uint8Array | null>(null);
-  const volumeAnimationRef = useRef<number | null>(null);
-
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<Promise<any> | null>(null);
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -103,7 +100,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   // Synchronous Gate: strictly tracks if we believe the socket is open
   const isConnectedRef = useRef<boolean>(false);
   
-  // Recursive connect reference - explicitly typed as mutable
+  // Recursive connect reference
   const connectRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -189,11 +186,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         demoTimerRef.current = null;
     }
 
-    if (volumeAnimationRef.current) {
-        cancelAnimationFrame(volumeAnimationRef.current);
-        volumeAnimationRef.current = null;
-    }
-
     if (silenceCheckIntervalRef.current) {
         window.clearInterval(silenceCheckIntervalRef.current);
         silenceCheckIntervalRef.current = null;
@@ -218,7 +210,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     [gainNodeRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
         if (ref.current) {
             try { ref.current.disconnect(); } catch(e) {}
-            ref.current = null;
+            // Do NOT nullify analysers here immediately if we want to visualizer to fade out gently
+            // But for safety, we usually keep the refs for the next session
         }
     });
 
@@ -232,7 +225,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         audioContextRef.current = null;
     }
     
-    setVolume(0);
     console.log('[BuaX1] Audio Stopped.');
   }, []);
 
@@ -342,8 +334,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       outputAnalyser.fftSize = 256;
       outputAnalyser.smoothingTimeConstant = 0.3;
       outputAnalyserRef.current = outputAnalyser;
-      outputDataArrayRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
-
+      
       const gainNode = outputCtx.createGain();
       gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
       
@@ -373,45 +364,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       inputAnalyser.fftSize = 256;
       inputAnalyser.smoothingTimeConstant = 0.3;
       inputAnalyserRef.current = inputAnalyser;
-      inputDataArrayRef.current = new Uint8Array(inputAnalyser.frequencyBinCount);
-
-      // 3. Visualizer Loop
-      const updateVolume = () => {
-        // Strict ID check
-        if (connectionIdRef.current !== myConnectionId) return;
-
-        let maxVol = 0;
-
-        if (inputAnalyserRef.current && !isMicMutedRef.current && inputDataArrayRef.current) {
-            const data = inputDataArrayRef.current;
-            inputAnalyserRef.current.getByteTimeDomainData(data as any);
-            let sum = 0;
-            for(let i=0; i<data.length; i++) {
-                const v = (data[i] - 128) / 128;
-                sum += v*v;
-            }
-            maxVol = Math.sqrt(sum / data.length);
-        }
-
-        if (outputAnalyserRef.current && outputDataArrayRef.current) {
-             const data = outputDataArrayRef.current;
-             outputAnalyserRef.current.getByteTimeDomainData(data as any);
-             let sum = 0;
-             for(let i=0; i<data.length; i++) {
-                 const v = (data[i] - 128) / 128;
-                 sum += v*v;
-             }
-             const outVol = Math.sqrt(sum / data.length);
-             if (outVol > maxVol) maxVol = outVol;
-        }
-        
-        if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
-
-        setVolume(maxVol);
-        volumeAnimationRef.current = requestAnimationFrame(updateVolume);
-      };
-      volumeAnimationRef.current = requestAnimationFrame(updateVolume);
-
+      
       // --- GEMINI CONNECTION ---
       const ai = new GoogleGenAI({ apiKey: currentKey });
       
@@ -432,7 +385,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             systemInstruction: currentPersona.baseInstruction,
             tools: tools,
             outputAudioTranscription: {}, 
-            inputAudioTranscription: {}, // Capture User Speech for transcript logging
+            inputAudioTranscription: {}, 
         },
         callbacks: {
           onopen: async () => {
@@ -490,12 +443,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                         for(let i=0; i<inputData.length; i++) inputData[i] = 0;
                     }
 
-                    // Strict VAD: If speech is detected, user is interrupting.
-                    // Immediately clear transcript to prevent old text from showing during new turn.
+                    // Strict VAD
                     if (hasSpeech(inputData) && !isMicMutedRef.current) {
                         lastUserSpeechTimeRef.current = Date.now();
-                        // Only clear if we haven't recently cleared to avoid flickering
-                        // But for "Only Current Sentence" logic, aggressive clearing is safer.
                         setTranscript(''); 
                     }
 
@@ -515,7 +465,13 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
                 source.connect(inputAnalyser);
                 source.connect(workletNode);
-                workletNode.connect(inputCtx.destination); // Keep graph alive
+                
+                // IMPORTANT: Worklet needs a sink to function, BUT we don't want to hear ourself.
+                // So we connect it to a dummy gain node with 0 volume, then to destination.
+                const muteGain = inputCtx.createGain();
+                muteGain.gain.value = 0;
+                workletNode.connect(muteGain);
+                muteGain.connect(inputCtx.destination);
                 
                 sourceRef.current = source;
                 workletNodeRef.current = workletNode;
@@ -685,11 +641,10 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             
             // Don't show error UI immediately if we have retries left
             if (retryCountRef.current < MAX_RETRIES) {
-               // The onclose handler will trigger the retry logic
                return;
             }
 
-            dispatchTranscript(); // Tripswitch on error
+            dispatchTranscript(); 
 
             setError("Connection failed. Please check your network.");
             setStatus('error');
@@ -710,7 +665,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     }
   }, [apiKeys, stopAudio, disconnect, dispatchTranscript]);
 
-  // Keep ref up to date for recursion
   useEffect(() => {
       connectRef.current = connect;
   }, [connect]);
@@ -719,7 +673,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     status,
     connect,
     disconnect: () => disconnect(), 
-    volume,
+    inputAnalyserRef, // RETURN REF
+    outputAnalyserRef, // RETURN REF
     detectedLanguage,
     transcript,
     error,
