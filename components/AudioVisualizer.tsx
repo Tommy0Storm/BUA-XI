@@ -9,6 +9,14 @@ interface AudioVisualizerProps {
   mode?: 'bars' | 'circle';
 }
 
+// Pooling Constants
+const MAX_PARTICLES = 60;
+const MAX_SHOCKWAVES = 10;
+
+// Reusable Object Types
+type Particle = { x: number; y: number; vx: number; vy: number; life: number; size: number; active: boolean };
+type Shockwave = { radius: number; opacity: number; width: number; active: boolean };
+
 // Helper to handle color manipulation
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -23,14 +31,23 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
   const inputDataRef = useRef<Uint8Array | null>(null);
   const outputDataRef = useRef<Uint8Array | null>(null);
 
+  // OBJECT POOLS
+  // Pre-allocate arrays to prevent Garbage Collection during the render loop
+  const poolsRef = useRef({
+      particles: Array.from({ length: MAX_PARTICLES }, (): Particle => ({ 
+          x: 0, y: 0, vx: 0, vy: 0, life: 0, size: 0, active: false 
+      })),
+      shockwaves: Array.from({ length: MAX_SHOCKWAVES }, (): Shockwave => ({ 
+          radius: 0, opacity: 0, width: 0, active: false 
+      }))
+  });
+
   // State for complex animation physics
   const stateRef = useRef({
     phase: 0,
     rotation: 0,
     smoothedVolume: 0,
     history: new Array(64).fill(0), // For radial graph
-    particles: [] as { x: number; y: number; vx: number; vy: number; life: number; size: number }[],
-    shockwaves: [] as { radius: number; opacity: number; width: number }[],
     lastVolume: 0
   });
 
@@ -42,7 +59,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true }); // Optimize for transparency
     if (!ctx) return;
 
     let animationFrameId: number;
@@ -61,10 +78,45 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     if (outputAnalyser && !outputDataRef.current) {
         outputDataRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
     }
+
+    // Helper: Spawn Particle from Pool
+    const spawnParticle = (cx: number, cy: number, v: number) => {
+        const pool = poolsRef.current.particles;
+        // Find first inactive particle
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+            if (!pool[i].active) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = v * 20; // Spawn radius offset
+                pool[i].active = true;
+                pool[i].x = cx + Math.cos(angle) * r;
+                pool[i].y = cy + Math.sin(angle) * r;
+                pool[i].vx = Math.cos(angle) * (1 + Math.random());
+                pool[i].vy = Math.sin(angle) * (1 + Math.random());
+                pool[i].life = 1.0;
+                pool[i].size = Math.random() * 2;
+                break; // Spawn only one per call
+            }
+        }
+    };
+
+    // Helper: Spawn Shockwave from Pool
+    const spawnShockwave = (baseRadius: number, v: number) => {
+        const pool = poolsRef.current.shockwaves;
+        for (let i = 0; i < MAX_SHOCKWAVES; i++) {
+            if (!pool[i].active) {
+                pool[i].active = true;
+                pool[i].radius = baseRadius * 0.3;
+                pool[i].opacity = 1;
+                pool[i].width = 2 + v * 10;
+                break;
+            }
+        }
+    };
     
     // Animation Loop
     const render = () => {
       const state = stateRef.current;
+      const pools = poolsRef.current;
       const rgb = rgbColor.current;
       const width = rect.width;
       const height = rect.height;
@@ -78,29 +130,28 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       if (isActive) {
           // Check Input (Mic)
           if (inputAnalyser && inputDataRef.current) {
-             // Cast to any to bypass strict ArrayBuffer vs SharedArrayBuffer type check
              inputAnalyser.getByteTimeDomainData(inputDataRef.current as any);
              let sum = 0;
              const data = inputDataRef.current;
-             for (let i = 0; i < data.length; i++) {
+             // Optimization: Sample every 4th point to increase perf
+             for (let i = 0; i < data.length; i += 4) {
                  const v = (data[i] - 128) / 128;
                  sum += v * v;
              }
-             const rms = Math.sqrt(sum / data.length);
+             const rms = Math.sqrt(sum / (data.length / 4));
              if (rms > maxVol) maxVol = rms;
           }
 
           // Check Output (AI Speaker)
           if (outputAnalyser && outputDataRef.current) {
-             // Cast to any to bypass strict ArrayBuffer vs SharedArrayBuffer type check
              outputAnalyser.getByteTimeDomainData(outputDataRef.current as any);
              let sum = 0;
              const data = outputDataRef.current;
-             for (let i = 0; i < data.length; i++) {
+             for (let i = 0; i < data.length; i += 4) {
                  const v = (data[i] - 128) / 128;
                  sum += v * v;
              }
-             const rms = Math.sqrt(sum / data.length);
+             const rms = Math.sqrt(sum / (data.length / 4));
              if (rms > maxVol) maxVol = rms;
           }
       }
@@ -127,7 +178,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
 
       // Detect Beats for Shockwaves
       if (v > 0.35 && v - state.lastVolume > 0.1) {
-          state.shockwaves.push({ radius: maxRadius * 0.3, opacity: 1, width: 2 + v * 10 });
+          spawnShockwave(maxRadius, v);
       }
       state.lastVolume = v;
 
@@ -138,17 +189,21 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       // --- RENDER ---
       
       ctx.clearRect(0, 0, width, height);
-      ctx.globalCompositeOperation = 'lighter'; // Additive blending for neon look
+      ctx.globalCompositeOperation = 'lighter'; // Additive blending
 
       if (mode === 'circle') {
-          // 1. SHOCKWAVES
-          for (let i = state.shockwaves.length - 1; i >= 0; i--) {
-              const wave = state.shockwaves[i];
+          
+          // 1. RENDER SHOCKWAVES (No Shadow)
+          // Iterate pool
+          for (let i = 0; i < MAX_SHOCKWAVES; i++) {
+              const wave = pools.shockwaves[i];
+              if (!wave.active) continue;
+
               wave.radius += 2 + (v * 5);
               wave.opacity -= 0.02;
               
               if (wave.opacity <= 0 || wave.radius > maxRadius) {
-                  state.shockwaves.splice(i, 1);
+                  wave.active = false; // Return to pool
                   continue;
               }
 
@@ -159,29 +214,34 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
               ctx.stroke();
           }
 
-          // 2. RADIAL AUDIO GRAPH
+          // 2. RADIAL AUDIO GRAPH (Low Shadow)
           const graphRadius = maxRadius * 0.75;
-          const barWidth = (Math.PI * 2) / state.history.length;
+          const histLen = state.history.length;
+          const barWidthAngle = (Math.PI * 2) / histLen;
           
           ctx.beginPath();
-          state.history.forEach((val, i) => {
-              const angle = i * barWidth - Math.PI / 2 + state.rotation;
+          for(let i = 0; i < histLen; i++) {
+              const val = state.history[i];
+              const angle = i * barWidthAngle - Math.PI / 2 + state.rotation;
               const h = val * 40;
               
-              const x1 = centerX + Math.cos(angle) * (graphRadius);
-              const y1 = centerY + Math.sin(angle) * (graphRadius);
-              const x2 = centerX + Math.cos(angle) * (graphRadius + h + 2);
-              const y2 = centerY + Math.sin(angle) * (graphRadius + h + 2);
+              const cosA = Math.cos(angle);
+              const sinA = Math.sin(angle);
+
+              const x1 = centerX + cosA * (graphRadius);
+              const y1 = centerY + sinA * (graphRadius);
+              const x2 = centerX + cosA * (graphRadius + h + 2);
+              const y2 = centerY + sinA * (graphRadius + h + 2);
               
               ctx.moveTo(x1, y1);
               ctx.lineTo(x2, y2);
-          });
+          }
           ctx.strokeStyle = `rgba(${rgb}, 0.3)`;
           ctx.lineWidth = 2;
           ctx.lineCap = 'round';
           ctx.stroke();
 
-          // 3. TECHNICAL RINGS
+          // 3. TECHNICAL RINGS (Static)
           ctx.beginPath();
           ctx.arc(centerX, centerY, maxRadius * 0.9, 0, Math.PI * 2);
           ctx.strokeStyle = `rgba(${rgb}, 0.1)`;
@@ -200,15 +260,17 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.stroke();
           ctx.restore();
 
-          // 4. THE CORE (Liquid Energy)
+          // 4. THE CORE (High Glow - Expensive)
+          // Group shadow calls together to minimize state changes
           const coreBaseRadius = maxRadius * 0.35;
           ctx.save();
           ctx.shadowBlur = 30 * vBoost;
           ctx.shadowColor = `rgba(${rgb}, 0.8)`;
           
           ctx.beginPath();
-          for (let i = 0; i <= 100; i++) {
-              const angle = (i / 100) * Math.PI * 2;
+          // Reduce complexity: 50 points instead of 100 is visually similar but faster
+          for (let i = 0; i <= 50; i++) {
+              const angle = (i / 50) * Math.PI * 2;
               const r = coreBaseRadius + 
                         Math.sin(angle * 5 + state.phase) * (10 * vBoost) + 
                         Math.cos(angle * 3 - state.phase) * (5 * vBoost);
@@ -228,7 +290,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           
           ctx.fillStyle = gradient;
           ctx.fill();
-          ctx.restore();
+          ctx.restore(); // Turn off shadow
 
           // 5. WIREFRAME MESH
           ctx.beginPath();
@@ -238,28 +300,22 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.setLineDash([2, 2]);
           ctx.stroke();
 
-          // 6. PARTICLES
+          // 6. PARTICLES (No Shadow)
           if (v > 0.1) {
-             const angle = Math.random() * Math.PI * 2;
-             const r = coreBaseRadius; 
-             state.particles.push({
-                 x: centerX + Math.cos(angle) * r,
-                 y: centerY + Math.sin(angle) * r,
-                 vx: Math.cos(angle) * (1 + Math.random()),
-                 vy: Math.sin(angle) * (1 + Math.random()),
-                 life: 1.0,
-                 size: Math.random() * 2
-             });
+             spawnParticle(centerX, centerY, v);
           }
 
-          for (let i = state.particles.length - 1; i >= 0; i--) {
-              const p = state.particles[i];
+          // Render Active Particles
+          for (let i = 0; i < MAX_PARTICLES; i++) {
+              const p = pools.particles[i];
+              if (!p.active) continue;
+
               p.x += p.vx * (1 + v);
               p.y += p.vy * (1 + v);
               p.life -= 0.03;
 
               if (p.life <= 0) {
-                  state.particles.splice(i, 1);
+                  p.active = false; // Return to pool
                   continue;
               }
 
