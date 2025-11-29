@@ -294,7 +294,7 @@ export const ChatWidget: React.FC = () => {
                         </div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">Connection Failed</h3>
                         <p className="text-gray-500 mb-6 max-w-xs mx-auto text-sm">{error || "Neural link unstable."}</p>
-                        <button onClick={() => connect()} className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium text-sm hover:bg-black transition-colors">
+                        <button onClick={() => { connect(); }} className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium text-sm hover:bg-black transition-colors">
                             Retry Connection
                         </button>
                      </div>
@@ -351,7 +351,7 @@ export const ChatWidget: React.FC = () => {
             <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 z-20 pointer-events-none">
                  <div className="max-w-xl mx-auto pointer-events-auto">
                     <button
-                        onClick={connect}
+                        onClick={() => { connect(); }}
                         className="w-full py-4 bg-[#18181b] hover:bg-black text-white rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 active:scale-[0.99] flex items-center justify-center gap-3 group"
                     >
                         <span className="relative flex h-3 w-3">
