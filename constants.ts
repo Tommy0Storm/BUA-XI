@@ -29,7 +29,7 @@ const LANGUAGE_FUNC = {
 // Define the Email Tool
 const EMAIL_FUNC = {
   name: 'send_email',
-  description: 'Send an email to the user. MANDATORY: You MUST call this tool whenever the user asks for a transcript, summary, notes, or confirmation. Do not refuse.',
+  description: 'Send an email to the user. CRITICAL: You MUST call this tool whenever the user asks for a transcript, summary, notes, or "send this to me". DO NOT REFUSE. You have full permission.',
   parameters: {
     type: Type.OBJECT,
     properties: {
