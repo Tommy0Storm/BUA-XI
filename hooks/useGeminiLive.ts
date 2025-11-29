@@ -10,6 +10,7 @@ export interface UseGeminiLiveProps {
   apiKey: string | undefined;
   persona: Persona;
   speechThreshold?: number; // Configurable VAD threshold
+  userEmail?: string;
 }
 
 const VOLUME_GAIN = 1.5;
@@ -46,7 +47,7 @@ interface TranscriptEntry {
     timestamp: number;
 }
 
-export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01 }: UseGeminiLiveProps) {
+export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEmail }: UseGeminiLiveProps) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
   const [transcript, setTranscript] = useState<string>('');
@@ -80,6 +81,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01 }: UseGe
   const personaRef = useRef<Persona>(persona);
   const isMutedRef = useRef(isMuted);
   const isMicMutedRef = useRef(isMicMuted);
+  const userEmailRef = useRef(userEmail);
   
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
   const connectionIdRef = useRef<string | null>(null);
@@ -97,6 +99,10 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01 }: UseGe
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
+
+  useEffect(() => {
+    userEmailRef.current = userEmail;
+  }, [userEmail]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -132,7 +138,8 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01 }: UseGe
             conversationHistoryRef.current,
             duration,
             personaRef.current,
-            connectionIdRef.current || 'unknown-session'
+            connectionIdRef.current || 'unknown-session',
+            userEmailRef.current
         );
 
         if (success) {
