@@ -310,55 +310,77 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
       compressor.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
 
+      // Enterprise Audio Constraints
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { 
             sampleRate: AUDIO_CONFIG.inputSampleRate,
             channelCount: 1,
-            echoCancellation: true,
-            autoGainControl: true, // Hardware AGC
-            noiseSuppression: true // Hardware NS
+            echoCancellation: { ideal: true },
+            autoGainControl: { ideal: true },
+            noiseSuppression: { ideal: true },
+            // @ts-ignore - Chrome specific
+            googEchoCancellation: { ideal: true },
+            // @ts-ignore - Chrome specific
+            googAutoGainControl: { ideal: true },
+            // @ts-ignore - Chrome specific
+            googNoiseSuppression: { ideal: true },
+            // @ts-ignore - Chrome specific
+            googHighpassFilter: { ideal: true }
         } 
       });
       streamRef.current = stream;
 
-      // --- INPUT DSP CHAIN ---
+      // --- INPUT DSP CHAIN (Enterprise Grade) ---
       const source = inputCtx.createMediaStreamSource(stream);
       sourceRef.current = source;
       
-      // 1. High Pass Filter (Remove Rumble/Low Freq Noise)
+      // 1. High Pass Filter (Standard Vocal Cut @ 85Hz)
       const highPassFilter = inputCtx.createBiquadFilter();
       highPassFilter.type = 'highpass';
-      highPassFilter.frequency.value = 85; // Standard cutoff for human voice
-      highPassFilter.Q.value = 0.5;
+      highPassFilter.frequency.value = 85; 
+      highPassFilter.Q.value = 0.707;
 
-      // 2. Dynamic Input Leveler (Soft Compressor)
-      // Boosts quiet voices, limits loud ones.
+      // 2. Low Pass Filter (Remove High-Freq Hiss/Static @ 8kHz)
+      const lowPassFilter = inputCtx.createBiquadFilter();
+      lowPassFilter.type = 'lowpass';
+      lowPassFilter.frequency.value = 8000;
+      lowPassFilter.Q.value = 0.707;
+
+      // 3. Noise Gate (Hard Compressor/Expander)
+      // Placed early to silence noise before amplification
+      const noiseGate = inputCtx.createDynamicsCompressor();
+      noiseGate.threshold.value = -55; 
+      noiseGate.knee.value = 10;
+      noiseGate.ratio.value = 15; // Aggressive gating
+      noiseGate.attack.value = 0;
+      noiseGate.release.value = 0.1;
+
+      // 4. Dynamic Leveler (Soft Compressor)
+      // Normalizes voice levels
       const inputLeveler = inputCtx.createDynamicsCompressor();
       inputLeveler.threshold.value = -24;
       inputLeveler.knee.value = 30;
-      inputLeveler.ratio.value = 3; // Gentle ratio for leveling
+      inputLeveler.ratio.value = 3; 
       inputLeveler.attack.value = 0.003;
       inputLeveler.release.value = 0.25;
 
-      // 3. Noise Gate (Hard Compressor)
-      // Clamps down when volume is very low to remove hiss
-      const noiseGate = inputCtx.createDynamicsCompressor();
-      noiseGate.threshold.value = -50; 
-      noiseGate.knee.value = 40;
-      noiseGate.ratio.value = 20; // High ratio acts as a gate
-      noiseGate.attack.value = 0;
-      noiseGate.release.value = 0.1;
+      // 5. Makeup Gain
+      // Boosts the clean, filtered signal
+      const makeupGain = inputCtx.createGain();
+      makeupGain.gain.value = 1.2;
 
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
       inputAnalyser.smoothingTimeConstant = 0.5;
       inputAnalyserRef.current = inputAnalyser;
 
-      // Connect Chain: Source -> HPF -> Leveler -> Gate -> Analyser -> Worklet
+      // Connect Chain: Source -> HPF -> LPF -> Gate -> Leveler -> Gain -> Analyser
       source.connect(highPassFilter);
-      highPassFilter.connect(inputLeveler);
-      inputLeveler.connect(noiseGate);
-      noiseGate.connect(inputAnalyser);
+      highPassFilter.connect(lowPassFilter);
+      lowPassFilter.connect(noiseGate);
+      noiseGate.connect(inputLeveler);
+      inputLeveler.connect(makeupGain);
+      makeupGain.connect(inputAnalyser);
 
       // Worklet Loading with Cross-Browser Compatibility
       const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
