@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useMemo } from 'react';
 
 interface AudioVisualizerProps {
@@ -233,7 +234,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.rotate(state.rotation);
           
           ctx.beginPath();
-          // Skip every 2nd point for performance
+          // Skip every 2nd point for performance optimization
           for(let i = 0; i < HIST_LEN; i += 2) {
               const val = state.history[i];
               if (val < 0.01) continue;
@@ -364,4 +365,14 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     render();
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isActive, inputAnalyser, 
+  }, [isActive, inputAnalyser, outputAnalyser, color, mode, trigTable]);
+
+  return (
+    <canvas 
+        ref={canvasRef} 
+        className={`block ${mode === 'circle' ? "w-full h-full" : "w-24 h-12"}`}
+    />
+  );
+};
+
+export default AudioVisualizer;
