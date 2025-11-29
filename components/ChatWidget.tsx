@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
@@ -94,15 +95,37 @@ export const ChatWidget: React.FC = () => {
 
   const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
 
+  // Handle Smooth Closing and Auto-Scroll to Console
+  const handleDisconnect = () => {
+    disconnect();
+    
+    // 1. Start Close Animation
+    setIsClosing(true);
+    
+    // 2. Wait for animation, then hide widget
+    setTimeout(() => {
+        setIsOpen(false);
+        setIsClosing(false);
+        
+        // 3. Scroll to Console to show email logs
+        const consoleSection = document.getElementById('console-section');
+        if (consoleSection) {
+            consoleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 400);
+  };
+
   const toggleWidget = () => {
     if (isOpen) {
-      if (status === 'connected') disconnect();
-      // Start closing animation
-      setIsClosing(true);
-      setTimeout(() => {
-          setIsOpen(false);
-          setIsClosing(false);
-      }, 300); // Match transition duration
+      if (status === 'connected') {
+          handleDisconnect();
+      } else {
+        setIsClosing(true);
+        setTimeout(() => {
+            setIsOpen(false);
+            setIsClosing(false);
+        }, 300);
+      }
     } else {
       setIsOpen(true);
     }
@@ -238,7 +261,7 @@ export const ChatWidget: React.FC = () => {
 
                          <ControlBtn 
                             active={true}
-                            onClick={() => disconnect()}
+                            onClick={handleDisconnect}
                             variant="danger"
                             icon={<LogOut size={20} />}
                             label="End Call"
