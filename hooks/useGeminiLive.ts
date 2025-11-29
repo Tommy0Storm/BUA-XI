@@ -326,7 +326,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       inputContextRef.current = inputCtx;
       nextStartTimeRef.current = outputCtx.currentTime;
 
-      // 1. Output Pipeline
+      // 1. Output Pipeline (Speaker)
       const compressor = outputCtx.createDynamicsCompressor();
       compressor.threshold.value = -20;
       compressor.knee.value = 30;
@@ -347,13 +347,23 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       outputAnalyser.connect(outputCtx.destination);
       gainNodeRef.current = gainNode;
 
-      // 2. Input Pipeline
+      // 2. Input Pipeline (Microphone) with DSP Enhancement
+      // Enterprise noise cancellation constraints
       const stream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
-              channelCount: 1
+              channelCount: 1,
+              // Chrome-specific hints for high-quality voice
+              // @ts-ignore
+              googEchoCancellation: true,
+              // @ts-ignore
+              googNoiseSuppression: true,
+              // @ts-ignore
+              googAutoGainControl: true,
+              // @ts-ignore
+              googHighpassFilter: true
           } 
       });
       
@@ -366,7 +376,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
-      inputAnalyser.smoothingTimeConstant = 0.3;
+      inputAnalyser.smoothingTimeConstant = 0.5; // Smoother visualization for mic
       inputAnalyserRef.current = inputAnalyser;
       
       // --- GEMINI CONNECTION ---
@@ -443,7 +453,25 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     URL.revokeObjectURL(blobUrl);
                 }
 
+                // --- DSP INPUT CHAIN ---
+                // 1. Source
                 const source = inputCtx.createMediaStreamSource(stream);
+                
+                // 2. High-pass Filter (Remove rumble/wind/thuds < 85Hz)
+                const lowCut = inputCtx.createBiquadFilter();
+                lowCut.type = 'highpass';
+                lowCut.frequency.value = 85; 
+
+                // 3. Dynamics Compressor (Boost quiet voice, clamp loud bursts)
+                // This gives "Podcast Quality" consistency
+                const inputCompressor = inputCtx.createDynamicsCompressor();
+                inputCompressor.threshold.value = -30; // Start compressing early
+                inputCompressor.knee.value = 40;       // Soft knee
+                inputCompressor.ratio.value = 12;      // High compression for consistent levels
+                inputCompressor.attack.value = 0;      // Instant attack
+                inputCompressor.release.value = 0.25;  // Fast release
+
+                // 4. Worklet
                 const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
 
                 // Handle internal processor errors
@@ -484,8 +512,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                     });
                 };
 
-                source.connect(inputAnalyser);
-                source.connect(workletNode);
+                // Connect the chain: Source -> HighPass -> Compressor -> Analyser -> Worklet
+                source.connect(lowCut);
+                lowCut.connect(inputCompressor);
+                inputCompressor.connect(inputAnalyser); 
+                inputCompressor.connect(workletNode);
                 
                 // IMPORTANT: Worklet needs a sink to function (clock signal), BUT we don't want to hear ourself.
                 // So we connect it to a dummy gain node with 0 volume, then to destination.
