@@ -7,27 +7,53 @@ export const AUDIO_CONFIG = {
   outputSampleRate: 24000,
 };
 
-export const LANGUAGE_TOOL: Tool[] = [
-  {
-    functionDeclarations: [
-      {
-        name: 'report_language_change',
-        description: 'Call this function ONLY when the user speaks a language DIFFERENT from the current conversation language. Do NOT call if the language has not changed. Purpose: To adapt system accent/grammar.',
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            language: {
-              type: Type.STRING,
-              enum: [
-                'English', 'Afrikaans', 'isiZulu', 'isiXhosa', 'Sepedi', 
-                'Setswana', 'Sesotho', 'Xitsonga', 'siSwati', 'Tshivenda', 'isiNdebele'
-              ]
-            },
-          },
-          required: ['language'],
-        },
+// Define the Language Tool
+const LANGUAGE_FUNC = {
+  name: 'report_language_change',
+  description: 'Call this function ONLY when the user speaks a language DIFFERENT from the current conversation language. Do NOT call if the language has not changed. Purpose: To adapt system accent/grammar.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      language: {
+        type: Type.STRING,
+        enum: [
+          'English', 'Afrikaans', 'isiZulu', 'isiXhosa', 'Sepedi', 
+          'Setswana', 'Sesotho', 'Xitsonga', 'siSwati', 'Tshivenda', 'isiNdebele'
+        ]
       },
-    ],
+    },
+    required: ['language'],
+  },
+};
+
+// Define the Email Tool
+const EMAIL_FUNC = {
+  name: 'send_email',
+  description: 'Send an email to the user. Use this when the user explicitly asks you to send information, a summary, notes, or a confirmation via email during the conversation.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      subject: {
+        type: Type.STRING,
+        description: 'The subject line of the email.'
+      },
+      body: {
+        type: Type.STRING,
+        description: 'The content of the email. Format this nicely with HTML tags (e.g., <br>, <b>, <ul>) for readability.'
+      },
+      recipient_email: {
+        type: Type.STRING,
+        description: 'Optional. Only use this if the user specifically dictates a DIFFERENT email address than their own. Otherwise, leave empty to default to the logged-in user.'
+      }
+    },
+    required: ['subject', 'body'],
+  },
+};
+
+// Combined Tools Export
+export const LIVE_API_TOOLS: Tool[] = [
+  {
+    functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC],
   },
 ];
 
