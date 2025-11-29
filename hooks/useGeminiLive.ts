@@ -14,6 +14,7 @@ const VOLUME_GAIN = 1.5;
 const MAX_RETRIES = 3;
 
 // Audio Worklet Code to run in a separate thread
+// We use a Blob to load this dynamically without needing a separate file in /public
 const WORKLET_CODE = `
 class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -35,6 +36,7 @@ class PCMProcessor extends AudioWorkletProcessor {
         }
       }
     }
+    // Return true to keep the processor alive
     return true;
   }
 }
@@ -176,7 +178,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     
     // Kill the worklet
     if (workletNodeRef.current) {
+        // Remove event listener to prevent processing errors during shutdown
         workletNodeRef.current.port.onmessage = null;
+        workletNodeRef.current.onprocessorerror = null;
         try { workletNodeRef.current.disconnect(); } catch(e) {}
         workletNodeRef.current = null;
     }
@@ -424,13 +428,30 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             // Audio Processing Setup with AudioWorklet
             try {
                 // Initialize Worklet
-                const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
+                // Use a Blob to create a worker file on the fly
+                // 'application/javascript; charset=utf-8' is safer for strict browsers
+                const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
                 const blobUrl = URL.createObjectURL(blob);
-                await inputCtx.audioWorklet.addModule(blobUrl);
-                URL.revokeObjectURL(blobUrl);
+                
+                try {
+                    await inputCtx.audioWorklet.addModule(blobUrl);
+                } catch (moduleErr) {
+                    console.error("[BuaX1] Failed to add worklet module:", moduleErr);
+                    throw new Error("Audio engine failed to load.");
+                } finally {
+                    // Always revoke the URL to prevent memory leaks
+                    URL.revokeObjectURL(blobUrl);
+                }
 
                 const source = inputCtx.createMediaStreamSource(stream);
                 const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
+
+                // Handle internal processor errors
+                workletNode.onprocessorerror = (err) => {
+                    console.error("[BuaX1] Worklet Processor Error:", err);
+                    // If the processor crashes, we can't continue audio capture
+                    disconnect("Audio processor crashed.");
+                };
 
                 workletNode.port.onmessage = (event) => {
                     // 1. Synchronous Gate Check
@@ -466,8 +487,9 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 source.connect(inputAnalyser);
                 source.connect(workletNode);
                 
-                // IMPORTANT: Worklet needs a sink to function, BUT we don't want to hear ourself.
+                // IMPORTANT: Worklet needs a sink to function (clock signal), BUT we don't want to hear ourself.
                 // So we connect it to a dummy gain node with 0 volume, then to destination.
+                // This prevents the audio graph from being garbage collected or paused.
                 const muteGain = inputCtx.createGain();
                 muteGain.gain.value = 0;
                 workletNode.connect(muteGain);
@@ -478,7 +500,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
             } catch (err) {
                 console.error("[BuaX1] Worklet Setup Failed", err);
-                disconnect("Audio subsystem failed.");
+                disconnect("Audio subsystem failed. Please refresh.");
             }
           },
           onmessage: async (msg: LiveServerMessage) => {
