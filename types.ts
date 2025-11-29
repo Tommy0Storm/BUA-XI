@@ -19,6 +19,7 @@ export interface Persona {
   maxDurationSeconds?: number; // Optional override for demo duration
   capabilities: string[];
   voiceDescription: string;
+  temperature?: number; // 0.0 (Strict/Legal) to 1.0 (Creative/Chatty)
 }
 
 export interface LiveSessionConfig {
