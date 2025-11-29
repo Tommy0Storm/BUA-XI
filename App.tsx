@@ -263,8 +263,8 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Visual Side */}
-            <div className="flex-1 w-full">
+            {/* Visual Side with ID for Auto-Scrolling */}
+            <div id="console-section" className="flex-1 w-full">
                <LiveConsole />
             </div>
 
