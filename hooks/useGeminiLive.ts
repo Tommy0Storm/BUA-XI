@@ -402,6 +402,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 console.log('[BuaX1] Session Connected.');
                 setStatus('connected');
                 isConnectedRef.current = true;
+                retryCountRef.current = 0; // Reset retry count on successful connection
                 
                 demoTimerRef.current = window.setInterval(() => {
                     setTimeLeft((prev) => {
@@ -421,7 +422,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 if (audioData) {
                     try {
                         const audioBuffer = await decodeAudioData(
-                            base64ToUint8Array(audioData),
+                            base64ToUint8Array(audioData) as any, // Cast to any to fix type mismatch
                             outputCtx,
                             AUDIO_CONFIG.outputSampleRate,
                             1
@@ -481,7 +482,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 }
 
                 // Handle Tool Calls (Language Detection)
-                // TypeScript Fix: Ensure functionCalls exists before iterating
                 if (msg.toolCall && msg.toolCall.functionCalls) {
                    for (const call of msg.toolCall.functionCalls) {
                        if (call.name === 'report_language_change') {
@@ -513,7 +513,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
             onclose: (e) => {
                  // Immediate Disconnect Handling (Quota/Key issues)
                  const duration = Date.now() - connectStartTimeRef.current;
-                 const wasClean = !e.wasClean; // e.wasClean is usually false for errors
                  
                  // If connection died instantly (< 4s), it's likely a bad key or quota limit
                  if (duration < 4000 && apiKeys.length > 1 && !isIntentionalDisconnectRef.current) {
@@ -521,6 +520,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                      
                      // Rotate Key
                      currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
+                     retryCountRef.current = 0; // Reset retry for new key
                      
                      // Safe Recursive Retry
                      setTimeout(() => {
@@ -531,13 +531,26 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
 
                 if (!isIntentionalDisconnectRef.current) {
                     console.warn('[BuaX1] Session closed unexpectedly:', e);
-                    disconnect("Connection lost."); 
+                    
+                    // Exponential Backoff Logic: 1s, 2s, 4s, 8s... capped at 10s
+                    const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
+                    retryCountRef.current += 1;
+                    
+                    console.log(`[BuaX1] Auto-reconnecting in ${backoffDelay}ms (Attempt ${retryCountRef.current})...`);
+                    stopAudio(); 
+                    
+                    // Don't set status to 'error' to avoid flashing UI, keep user in the flow
+                    // setStatus('connecting'); // Optional
+                    
+                    setTimeout(() => {
+                        if (connectRef.current) connectRef.current(true);
+                    }, backoffDelay);
+                } else {
+                    // Normal disconnect already handled
                 }
             },
             onerror: (err) => {
                  console.error('[BuaX1] Session Error:', err);
-                 // Don't disconnect here immediately if onclose handles it, 
-                 // but for safety, ensure we catch it.
                  isConnectedRef.current = false;
             }
         }
