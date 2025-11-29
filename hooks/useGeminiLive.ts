@@ -1,3 +1,4 @@
+
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
@@ -156,9 +157,14 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
     connectionIdRef.current = null;
     
     if (workletNodeRef.current) {
+        // Remove event listeners
         workletNodeRef.current.port.onmessage = null;
         workletNodeRef.current.onprocessorerror = null;
-        try { workletNodeRef.current.disconnect(); } catch(e) {}
+        try { 
+          workletNodeRef.current.disconnect(); 
+        } catch(e) {
+          // Ignore disconnect errors
+        }
         workletNodeRef.current = null;
     }
 
@@ -282,6 +288,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
       inputContextRef.current = inputCtx;
       nextStartTimeRef.current = outputCtx.currentTime;
 
+      // Output DSP Chain
       const compressor = outputCtx.createDynamicsCompressor();
       compressor.threshold.value = -20;
       compressor.knee.value = 30;
@@ -313,24 +320,34 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
       });
       streamRef.current = stream;
 
+      // Input DSP Chain
       const source = inputCtx.createMediaStreamSource(stream);
       sourceRef.current = source;
       
+      // 1. High Pass Filter (Remove Rumble)
+      const highPassFilter = inputCtx.createBiquadFilter();
+      highPassFilter.type = 'highpass';
+      highPassFilter.frequency.value = 85; // 85Hz cutoff for voice clarity
+      highPassFilter.Q.value = 0.5;
+
+      // 2. Noise Gate (DynamicsCompressor)
+      const noiseGate = inputCtx.createDynamicsCompressor();
+      noiseGate.threshold.value = -50;
+      noiseGate.knee.value = 40;
+      noiseGate.ratio.value = 12; // High ratio acts as soft gate
+      noiseGate.attack.value = 0;
+      noiseGate.release.value = 0.25;
+
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
       inputAnalyser.smoothingTimeConstant = 0.5;
       inputAnalyserRef.current = inputAnalyser;
-      
-      const noiseGate = inputCtx.createDynamicsCompressor();
-      noiseGate.threshold.value = -50;
-      noiseGate.knee.value = 40;
-      noiseGate.ratio.value = 12;
-      noiseGate.attack.value = 0;
-      noiseGate.release.value = 0.25;
 
-      source.connect(noiseGate);
+      source.connect(highPassFilter);
+      highPassFilter.connect(noiseGate);
       noiseGate.connect(inputAnalyser);
 
+      // Worklet Loading with Strict Disposal
       const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
       const workletUrl = URL.createObjectURL(blob);
       let workletNode: AudioWorkletNode;
@@ -342,18 +359,21 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
         dispatchLog('error', 'Audio Subsystem Failed', err.message);
         throw new Error(`Failed to initialize Audio Worklet: ${err.message}`);
       } finally {
+        // Clean up blob URL immediately
         URL.revokeObjectURL(workletUrl); 
       }
       
       workletNodeRef.current = workletNode;
       
       workletNode.onprocessorerror = (err) => {
+        console.error("AudioWorklet Processor Error:", err);
         if (isConnectedRef.current) {
             disconnect('Audio processor crashed. Please reconnect.');
         }
       };
       
       inputAnalyser.connect(workletNode);
+      // Connect Worklet to destination via zero-gain to keep graph alive without feedback
       const nullGain = inputCtx.createGain();
       nullGain.gain.value = 0;
       workletNode.connect(nullGain);
@@ -398,7 +418,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                 if (audioData) {
                     try {
                         const audioBuffer = await decodeAudioData(
-                            base64ToUint8Array(audioData) as any,
+                            base64ToUint8Array(audioData) as any, // Cast to any to fix Uint8Array/ArrayBufferLike mismatch
                             outputCtx,
                             AUDIO_CONFIG.outputSampleRate,
                             1
@@ -485,6 +505,7 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
             onclose: (e) => {
                  const duration = Date.now() - connectStartTimeRef.current;
                  
+                 // Smart Error Handling for Quota vs Network
                  if (duration < 4000 && apiKeys.length > 1 && !isIntentionalDisconnectRef.current) {
                      dispatchLog('warn', 'Quota Exceeded / Key Invalid', 'Rotating Credentials...');
                      currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
