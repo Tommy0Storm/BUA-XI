@@ -38,8 +38,11 @@ jobs:
         run: npm run build
         env:
           # This injects the secret API_KEY from GitHub Settings -> Secrets and variables -> Actions
-          # To use multiple keys, paste them into the Secret value separated by commas: key1,key2,key3
           API_KEY: ${{ secrets.API_KEY }}
+          # Inject EmailJS Secrets
+          EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
+          EMAILJS_TEMPLATE_ID: ${{ secrets.EMAILJS_TEMPLATE_ID }}
+          EMAILJS_PUBLIC_KEY: ${{ secrets.EMAILJS_PUBLIC_KEY }}
           
       - name: Setup Pages
         uses: actions/configure-pages@v5
