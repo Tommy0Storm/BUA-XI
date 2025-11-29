@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { ChatWidget } from './components/ChatWidget';
+import { LiveConsole } from './components/LiveConsole';
 import { ExternalLink, Cpu, Globe, Mic, ChevronRight, Zap, ArrowRight, ShieldCheck, FileText, Lock, Database, FileSpreadsheet, Send } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -35,6 +37,20 @@ const App: React.FC = () => {
         }
         .animate-fade-up {
           animation: fadeUp 0.8s cubic-bezier(0.2, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.5s ease-out forwards;
+        }
+        @keyframes fadeInLeft {
+          from { opacity: 0; transform: translateX(-10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .animate-fade-in-left {
+          animation: fadeInLeft 0.3s ease-out forwards;
         }
       `}</style>
 
@@ -249,42 +265,7 @@ const App: React.FC = () => {
 
             {/* Visual Side */}
             <div className="flex-1 w-full">
-               <div className="relative rounded-[2.5rem] bg-[#0F0F0F] border border-white/10 p-2 shadow-2xl overflow-hidden group hover:scale-[1.02] transition-transform duration-500">
-                   {/* Fake Code / Action Interface */}
-                   <div className="bg-black/50 rounded-[2rem] p-6 h-full min-h-[400px] flex flex-col relative">
-                      <div className="flex items-center gap-2 mb-8 border-b border-white/5 pb-4">
-                         <div className="w-3 h-3 rounded-full bg-red-500/50"></div>
-                         <div className="w-3 h-3 rounded-full bg-yellow-500/50"></div>
-                         <div className="w-3 h-3 rounded-full bg-green-500/50"></div>
-                         <div className="ml-auto text-xs text-gray-600 font-mono">ACTION_LOG.json</div>
-                      </div>
-
-                      <div className="space-y-4 font-mono text-sm">
-                         <div className="flex gap-4 text-emerald-500/50">
-                            <span>10:42:01</span>
-                            <span className="text-emerald-400">Input Received: "I'll pay R500 on Friday."</span>
-                         </div>
-                         <div className="flex gap-4 text-blue-500/50">
-                            <span>10:42:02</span>
-                            <span className="text-blue-400">Processing Intent: PROMISE_TO_PAY</span>
-                         </div>
-                         <div className="flex gap-4 text-purple-500/50">
-                            <span>10:42:03</span>
-                            <span className="text-purple-400">Executing Tool: update_sage_ledger(id=882, amount=500)</span>
-                         </div>
-                         <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 mt-4 animate-pulse">
-                            <div className="text-emerald-500 font-bold mb-1">SUCCESS</div>
-                            <div className="text-gray-400 text-xs">Ledger updated. Receipt #99281 generated. Email dispatch to accounts@vcb-ai.online queued.</div>
-                         </div>
-                      </div>
-                      
-                      {/* Floating Badge */}
-                      <div className="absolute bottom-6 right-6 px-4 py-2 bg-white text-black rounded-lg font-bold text-xs shadow-lg flex items-center gap-2">
-                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                         LIVE EXECUTION
-                      </div>
-                   </div>
-               </div>
+               <LiveConsole />
             </div>
 
           </div>
