@@ -102,7 +102,7 @@ export const ChatWidget: React.FC = () => {
     // 1. Start Close Animation
     setIsClosing(true);
     
-    // 2. Wait for animation, then hide widget
+    // 2. Wait for animation, then hide widget and scroll
     setTimeout(() => {
         setIsOpen(false);
         setIsClosing(false);
@@ -112,7 +112,7 @@ export const ChatWidget: React.FC = () => {
         if (consoleSection) {
             consoleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-    }, 400);
+    }, 500);
   };
 
   const toggleWidget = () => {
