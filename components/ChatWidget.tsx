@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
@@ -80,6 +79,7 @@ const ControlBtn: React.FC<ControlBtnProps> = ({
 
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const [showCaptions, setShowCaptions] = useState(true);
@@ -97,7 +97,12 @@ export const ChatWidget: React.FC = () => {
   const toggleWidget = () => {
     if (isOpen) {
       if (status === 'connected') disconnect();
-      setIsOpen(false);
+      // Start closing animation
+      setIsClosing(true);
+      setTimeout(() => {
+          setIsOpen(false);
+          setIsClosing(false);
+      }, 300); // Match transition duration
     } else {
       setIsOpen(true);
     }
@@ -145,10 +150,12 @@ export const ChatWidget: React.FC = () => {
 
   const isTimeLow = timeLeft <= 30;
 
+  const animationClass = isClosing ? "opacity-0 scale-95 translate-y-4" : "opacity-100 scale-100 translate-y-0";
+
   // --- VIEW: CONNECTED (VOICE STAGE) ---
   if ((status === 'connected' || status === 'connecting') && isOpen) {
       return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center animate-fade-in-up origin-bottom-right font-sans">
+        <div className={`fixed bottom-6 right-6 z-50 flex flex-col items-center origin-bottom-right font-sans transition-all duration-300 ease-in-out ${animationClass}`}>
              
              {/* Main Container - The "Stage" */}
              <div className="w-[24rem] h-[38rem] bg-[#09090b] rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col border border-white/10 ring-1 ring-black/50">
@@ -262,13 +269,18 @@ export const ChatWidget: React.FC = () => {
           </div>
       )}
 
+      {/* Backdrop */}
       {isOpen && status !== 'connected' && status !== 'connecting' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={toggleWidget}></div>
+        <div 
+          className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isClosing ? 'opacity-0' : 'opacity-100'}`} 
+          onClick={toggleWidget}
+        ></div>
       )}
 
+      {/* Modal */}
       {isOpen && status !== 'connected' && status !== 'connecting' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-          <div className="pointer-events-auto bg-[#FAFAFA] w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-300 border border-white/50">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none transition-all duration-300 ${isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+          <div className="pointer-events-auto bg-[#FAFAFA] w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-white/50">
             
             <div className="bg-white border-b border-gray-100 p-6 flex justify-between items-start">
                 <div>
@@ -367,8 +379,9 @@ export const ChatWidget: React.FC = () => {
         </div>
       )}
 
+      {/* Floating Trigger Button (Visible when closed) */}
       {!isOpen && (
-        <div className="fixed bottom-8 right-8 z-50">
+        <div className={`fixed bottom-8 right-8 z-50 transition-all duration-300 ${isClosing ? 'translate-y-20 opacity-0' : 'translate-y-0 opacity-100'}`}>
             <button
                 onClick={toggleWidget}
                 className="pl-4 pr-5 py-3 bg-[#18181b] text-white rounded-full shadow-2xl hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all group border border-white/10"
