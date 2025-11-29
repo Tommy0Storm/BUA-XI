@@ -171,7 +171,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
         // Remove event listener to prevent processing errors during shutdown
         workletNodeRef.current.port.onmessage = null;
         workletNodeRef.current.onprocessorerror = null;
-        try { workletNodeRef.current.disconnect(); } catch(e) {}
+        try { 
+            workletNodeRef.current.disconnect(); 
+        } catch(e) {
+            console.warn("[BuaX1] Failed to disconnect worklet node:", e);
+        }
         workletNodeRef.current = null;
     }
 
@@ -186,7 +190,14 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     }
 
     if (inputContextRef.current) {
-      try { inputContextRef.current.close(); } catch(e) {}
+      try { 
+          // Ensure we close the context, but handle if it's already closed
+          if(inputContextRef.current.state !== 'closed') {
+              inputContextRef.current.close(); 
+          }
+      } catch(e) {
+           console.warn("[BuaX1] Error closing input context:", e);
+      }
       inputContextRef.current = null;
     }
     
@@ -213,7 +224,11 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     activeSourcesRef.current.clear();
     
     if (audioContextRef.current) {
-        try { audioContextRef.current.close(); } catch(e) {}
+        try { 
+            if (audioContextRef.current.state !== 'closed') {
+                audioContextRef.current.close(); 
+            }
+        } catch(e) {}
         audioContextRef.current = null;
     }
     
@@ -363,24 +378,27 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       noiseGate.connect(inputAnalyser);
 
       // 3. Audio Worklet - Robust Loading
+      // Note: We use a Blob to load the worklet code to avoid external file dependencies.
       const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
       const workletUrl = URL.createObjectURL(blob);
-      
+      let workletNode: AudioWorkletNode;
+
       try {
         await inputCtx.audioWorklet.addModule(workletUrl);
+        workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
       } catch (err: any) {
-        throw new Error(`Failed to load audio worklet: ${err.message}`);
+        console.error("[BuaX1] AudioWorklet init failed:", err);
+        throw new Error(`Failed to initialize Audio Worklet: ${err.message}`);
       } finally {
         URL.revokeObjectURL(workletUrl); // Cleanup memory immediately
       }
       
-      const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
       workletNodeRef.current = workletNode;
       
       workletNode.onprocessorerror = (err) => {
         console.error('[BuaX1] Worklet Processor Error:', err);
-        // Don't disconnect immediately for minor glitches, but log it.
-        // If it stops processing, the session will time out via silence detection eventually.
+        // If the processor crashes, we should probably attempt a reconnect or stop
+        // For now, we log it.
       };
       
       inputAnalyser.connect(workletNode);
