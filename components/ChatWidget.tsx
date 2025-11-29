@@ -1,12 +1,13 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useGeminiLive } from '../hooks/useGeminiLive';
 import { PERSONAS } from '../constants';
 import AudioVisualizer from './AudioVisualizer';
+import { sendTranscriptEmail } from '../services/emailService';
 import { 
   X, Mic, MicOff, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand
 } from 'lucide-react';
 
 // --- VOICE UI KIT PRIMITIVES ---
@@ -91,12 +92,15 @@ export const ChatWidget: React.FC = () => {
   const [userEmail, setUserEmail] = useState('');
   const [isEmailValid, setIsEmailValid] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
+  
+  // PTT Local State for Visuals
+  const [isPttVisualActive, setIsPttVisualActive] = useState(false);
 
   const apiKey = process.env.API_KEY;
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
 
-  const { status, connect, disconnect, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent } = useGeminiLive({
+  const { status, connect, disconnect, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent, isPttMode, setPttMode, setPttActive } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
     userEmail: userEmail,
@@ -120,6 +124,66 @@ export const ChatWidget: React.FC = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     setIsEmailValid(emailRegex.test(userEmail));
   }, [userEmail]);
+  
+  // Keyboard PTT Listener
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (status === 'connected' && isPttMode && e.code === 'Space' && !e.repeat) {
+              setPttActive(true);
+              setIsPttVisualActive(true);
+          }
+      };
+      
+      const handleKeyUp = (e: KeyboardEvent) => {
+          if (status === 'connected' && isPttMode && e.code === 'Space') {
+              setPttActive(false);
+              setIsPttVisualActive(false);
+          }
+      };
+      
+      if (isOpen && status === 'connected') {
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+      }
+      
+      return () => {
+          window.removeEventListener('keydown', handleKeyDown);
+          window.removeEventListener('keyup', handleKeyUp);
+      }
+  }, [isOpen, status, isPttMode, setPttActive]);
+
+  // Transcript Recovery Check
+  useEffect(() => {
+      const backup = localStorage.getItem('bua_transcript_backup');
+      if (backup) {
+          try {
+              const data = JSON.parse(backup);
+              const age = Date.now() - data.timestamp;
+              // If backup is less than 24 hours old, prompt
+              if (age < 86400000) {
+                  console.log("Found transcript backup");
+              } else {
+                  localStorage.removeItem('bua_transcript_backup');
+              }
+          } catch(e) {}
+      }
+  }, []);
+  
+  const handleRecoverSession = async () => {
+      const backup = localStorage.getItem('bua_transcript_backup');
+      if (backup && isEmailValid) {
+          const data = JSON.parse(backup);
+          await sendTranscriptEmail(
+              data.history,
+              0, // Unknown duration
+              selectedPersona,
+              "RECOVERED-SESSION",
+              userEmail
+          );
+          localStorage.removeItem('bua_transcript_backup');
+          alert("Transcript recovered and emailed successfully.");
+      }
+  };
 
   // Handle Smooth Closing and Auto-Scroll to Console
   const handleDisconnect = () => {
@@ -227,7 +291,16 @@ export const ChatWidget: React.FC = () => {
                 {/* 2. The Visualizer Stage */}
                 <div className="flex-1 flex flex-col items-center justify-center relative bg-grid-pattern select-none">
                      {/* Ambient Glow */}
-                     <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full blur-[80px] opacity-20 pointer-events-none transition-colors duration-1000 ${selectedPersona.gender === 'Male' ? 'bg-emerald-600' : 'bg-amber-600'}`}></div>
+                     <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full blur-[80px] opacity-20 pointer-events-none transition-colors duration-1000 ${isPttVisualActive ? 'bg-cyan-500 opacity-40' : (selectedPersona.gender === 'Male' ? 'bg-emerald-600' : 'bg-amber-600')}`}></div>
+                     
+                     {/* PTT Status Overlay */}
+                     {isPttMode && (
+                        <div className={`absolute top-24 z-20 transition-all duration-200 ${isPttVisualActive ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}>
+                            <div className={`px-4 py-1 rounded-full text-xs font-bold tracking-widest uppercase border ${isPttVisualActive ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.5)]' : 'bg-black/50 text-cyan-500 border-cyan-500/50'}`}>
+                                {isPttVisualActive ? 'TRANSMITTING' : 'HOLD SPACEBAR'}
+                            </div>
+                        </div>
+                     )}
 
                      {/* Avatar & Visualizer */}
                      <div className="relative w-72 h-72 flex items-center justify-center">
@@ -242,7 +315,7 @@ export const ChatWidget: React.FC = () => {
                          </div>
                          
                          {/* Persona Avatar */}
-                         <div className="relative z-10 w-24 h-24 rounded-full bg-[#18181b] flex items-center justify-center shadow-2xl border border-white/10">
+                         <div className={`relative z-10 w-24 h-24 rounded-full bg-[#18181b] flex items-center justify-center shadow-2xl border transition-colors duration-300 ${isPttVisualActive ? 'border-cyan-500' : 'border-white/10'}`}>
                               {getPersonaIcon(selectedPersona.icon, 40, selectedPersona.gender === 'Male' ? "text-emerald-400" : "text-amber-400")}
                          </div>
                      </div>
@@ -274,6 +347,14 @@ export const ChatWidget: React.FC = () => {
                             variant={!isMicMuted ? 'primary' : 'secondary'}
                             icon={isMicMuted ? <MicOff size={20} className="text-red-400" /> : <Mic size={20} />}
                             label={isMicMuted ? "Unmute" : "Mute"}
+                         />
+                         
+                         <ControlBtn 
+                            active={isPttMode}
+                            onClick={() => setPttMode(!isPttMode)}
+                            variant={isPttMode ? 'primary' : 'secondary'}
+                            icon={<Hand size={20} className={isPttMode ? "text-white" : "text-gray-400"} />}
+                            label="Push-to-Talk"
                          />
 
                          <ControlBtn 
@@ -317,6 +398,28 @@ export const ChatWidget: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+      
+      {/* Recovery Banner */}
+      {localStorage.getItem('bua_transcript_backup') && (
+         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] animate-fade-in w-full max-w-lg px-4">
+             <div className="bg-amber-500/10 border border-amber-500/50 backdrop-blur-md text-amber-100 p-4 rounded-xl flex items-center justify-between shadow-2xl">
+                 <div className="flex items-center gap-3">
+                     <AlertCircle size={20} className="text-amber-500" />
+                     <div className="text-sm">
+                         <div className="font-bold text-amber-500">System Recovery</div>
+                         <div className="text-xs opacity-80">Previous session transcript found.</div>
+                     </div>
+                 </div>
+                 <button 
+                    onClick={handleRecoverSession}
+                    disabled={!isEmailValid}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${isEmailValid ? 'bg-amber-500 text-black hover:bg-amber-400' : 'bg-gray-800 text-gray-500 cursor-not-allowed'}`}
+                 >
+                    Recover & Email
+                 </button>
+             </div>
+         </div>
       )}
 
       {/* Backdrop */}
