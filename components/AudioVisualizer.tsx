@@ -63,7 +63,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     phase: 0,
     rotation: 0,
     smoothedVolume: 0,
-    history: new Array(HIST_LEN).fill(0), 
+    history: new Float32Array(HIST_LEN), // Circular buffer (O(1)) instead of Array (O(N))
+    historyHead: 0, // Pointer to current head of circular buffer
     lastVolume: 0,
     sourceMix: 0 // 0 = Persona, 1 = User
   });
@@ -140,6 +141,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       
       if (isActive) {
           if (inputAnalyser && inputDataRef.current) {
+             // FIXED: Cast to any to avoid Uint8Array<ArrayBufferLike> TS error
              inputAnalyser.getByteTimeDomainData(inputDataRef.current as any);
              const data = inputDataRef.current;
              let sum = 0;
@@ -151,6 +153,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           }
 
           if (outputAnalyser && outputDataRef.current) {
+             // FIXED: Cast to any to avoid Uint8Array<ArrayBufferLike> TS error
              outputAnalyser.getByteTimeDomainData(outputDataRef.current as any);
              const data = outputDataRef.current;
              let sum = 0;
@@ -163,9 +166,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       }
 
       // Determine Source Color Mix
-      // If User is louder, mix towards 1. If AI is louder, mix towards 0.
       const targetMix = inputVol > outputVol ? 1.0 : 0.0;
-      state.sourceMix += (targetMix - state.sourceMix) * 0.1; // Smooth transition
+      state.sourceMix += (targetMix - state.sourceMix) * 0.1; 
 
       // Interpolate Color
       currentRgb.current = {
@@ -178,20 +180,19 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       let maxVol = Math.max(inputVol, outputVol);
       if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
       
-      // SENSITIVITY TUNING
-      // Boost signal for visualization
+      // Sensitivity Boost
       maxVol = maxVol * 3.5; 
 
       const targetVolume = isActive ? Math.max(0.01, maxVol) : 0.01;
-      // Tuned Lerp: Fast attack (0.2), smoother release (0.08) to reduce jitter
       const lerpFactor = targetVolume > state.smoothedVolume ? 0.2 : 0.08; 
       state.smoothedVolume += (targetVolume - state.smoothedVolume) * lerpFactor;
       
       const v = state.smoothedVolume;
       const vBoost = v * 2.0; 
       
-      state.history.push(v);
-      state.history.shift();
+      // Update Circular History Buffer (O(1))
+      state.history[state.historyHead] = v;
+      state.historyHead = (state.historyHead + 1) % HIST_LEN;
 
       if (v > 0.35 && v - state.lastVolume > 0.1) {
           spawnShockwave(maxRadius, v);
@@ -205,7 +206,6 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       ctx.globalCompositeOperation = 'lighter'; 
 
       if (mode === 'circle') {
-          
           // 1. RENDER SHOCKWAVES
           for (let i = 0; i < MAX_SHOCKWAVES; i++) {
               const wave = pools.shockwaves[i];
@@ -234,13 +234,15 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.rotate(state.rotation);
           
           ctx.beginPath();
-          // Skip every 2nd point for performance optimization
+          // Loop through history efficiently using circular buffer logic
           for(let i = 0; i < HIST_LEN; i += 2) {
-              const val = state.history[i];
+              // Calculate index: (Head - 1 - i + Length) % Length
+              const index = (state.historyHead - 1 - i + HIST_LEN) % HIST_LEN;
+              const val = state.history[index];
               if (val < 0.01) continue;
               
               const h = val * 40;
-              const cos = trigTable.cos[i];
+              const cos = trigTable.cos[i]; // Use loop index for angle
               const sin = trigTable.sin[i];
               
               const x1 = cos * graphRadius;
