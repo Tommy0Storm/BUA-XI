@@ -78,7 +78,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       if (isActive) {
           // Check Input (Mic)
           if (inputAnalyser && inputDataRef.current) {
-             inputAnalyser.getByteTimeDomainData(inputDataRef.current);
+             // Cast to any to bypass strict ArrayBuffer vs SharedArrayBuffer type check
+             inputAnalyser.getByteTimeDomainData(inputDataRef.current as any);
              let sum = 0;
              const data = inputDataRef.current;
              for (let i = 0; i < data.length; i++) {
@@ -91,7 +92,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
 
           // Check Output (AI Speaker)
           if (outputAnalyser && outputDataRef.current) {
-             outputAnalyser.getByteTimeDomainData(outputDataRef.current);
+             // Cast to any to bypass strict ArrayBuffer vs SharedArrayBuffer type check
+             outputAnalyser.getByteTimeDomainData(outputDataRef.current as any);
              let sum = 0;
              const data = outputDataRef.current;
              for (let i = 0; i < data.length; i++) {
