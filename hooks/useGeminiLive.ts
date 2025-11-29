@@ -1,9 +1,9 @@
-
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
-import { createPcmBlob, decodeAudioData, base64ToUint8Array, hasSpeech } from '../utils/audioUtils';
+import { createPcmBlob, decodeAudioData, hasSpeech, base64ToUint8Array } from '../utils/audioUtils';
 import { ConnectionStatus, Persona } from '../types';
+import { sendTranscriptEmail } from '../services/emailService';
 
 export interface UseGeminiLiveProps {
   apiKey: string | undefined;
@@ -11,10 +11,8 @@ export interface UseGeminiLiveProps {
 }
 
 const VOLUME_GAIN = 1.5;
-const MAX_RETRIES = 3;
 
 // Audio Worklet Code to run in a separate thread
-// We use a Blob to load this dynamically without needing a separate file in /public
 const WORKLET_CODE = `
 class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
@@ -36,7 +34,6 @@ class PCMProcessor extends AudioWorkletProcessor {
         }
       }
     }
-    // Return true to keep the processor alive
     return true;
   }
 }
@@ -87,7 +84,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const personaRef = useRef<Persona>(persona);
   const isMutedRef = useRef(isMuted);
   const isMicMutedRef = useRef(isMicMuted);
-  const detectedLanguageRef = useRef(detectedLanguage);
   
   const lastUserSpeechTimeRef = useRef<number>(Date.now());
   const silenceCheckIntervalRef = useRef<number | null>(null);
@@ -99,19 +95,16 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
   const connectStartTimeRef = useRef<number>(0);
   const conversationHistoryRef = useRef<TranscriptEntry[]>([]);
   
+  // Transcription accumulators
+  const currentInputTranscriptionRef = useRef<string>('');
+  const currentOutputTranscriptionRef = useRef<string>('');
+  
   // Synchronous Gate: strictly tracks if we believe the socket is open
   const isConnectedRef = useRef<boolean>(false);
   
-  // Recursive connect reference
-  const connectRef = useRef<(() => Promise<void>) | null>(null);
-
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
-
-  useEffect(() => {
-    detectedLanguageRef.current = detectedLanguage;
-  }, [detectedLanguage]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -138,32 +131,26 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     setIsMicMuted(prev => !prev);
   }, []);
 
-  const calculateBackoff = (attempt: number) => {
-    // Exponential backoff: 1s, 2s, 4s, 8s... capped at 10s
-    return Math.min(1000 * Math.pow(2, attempt), 10000);
-  };
-
   // --- TRIPSWITCH: EMAIL DISPATCH LOGIC ---
-  const dispatchTranscript = useCallback(() => {
+  const dispatchTranscript = useCallback(async () => {
     const duration = Date.now() - connectStartTimeRef.current;
     
     // Condition: Session must be longer than 20 seconds
     if (duration > 20000 && conversationHistoryRef.current.length > 0) {
-        console.log(`[BuaX1] ⚡ TRIPSWITCH: Session Duration ${Math.round(duration/1000)}s > 20s. Dispatching Transcript...`);
+        console.log(`[BuaX1] ⚡ TRIPSWITCH: Session Duration ${Math.round(duration/1000)}s > 20s. Sending to Email Service...`);
         
-        console.group("📧 EMAILING TRANSCRIPT TO: tommy@vcb-ai.online");
-        console.log("Subject: Bua X1 Session Transcript");
-        console.log(`Time: ${new Date().toLocaleString()}`);
-        console.log(`Duration: ${Math.round(duration/1000)}s`);
-        console.table(conversationHistoryRef.current);
-        console.groupEnd();
+        // Pass the ref data to the service
+        const success = await sendTranscriptEmail(
+            conversationHistoryRef.current,
+            duration,
+            personaRef.current,
+            connectionIdRef.current || 'unknown-session'
+        );
 
-        // Simulate Network Request Delay
-        setTimeout(() => {
+        if (success) {
             setTranscriptSent(true);
-            // Auto-hide the notification flag after a while
             setTimeout(() => setTranscriptSent(false), 5000);
-        }, 800);
+        }
     } else {
         console.log(`[BuaX1] Session ended. Duration ${Math.round(duration/1000)}s < 20s. No transcript sent.`);
     }
@@ -214,8 +201,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     [gainNodeRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
         if (ref.current) {
             try { ref.current.disconnect(); } catch(e) {}
-            // Do NOT nullify analysers here immediately if we want to visualizer to fade out gently
-            // But for safety, we usually keep the refs for the next session
         }
     });
 
@@ -231,13 +216,6 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     
     console.log('[BuaX1] Audio Stopped.');
   }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-      return () => {
-          stopAudio();
-      };
-  }, [stopAudio]);
 
   const disconnect = useCallback(async (errorMessage?: string) => {
     console.log('[BuaX1] Disconnecting session (Intentional)...');
@@ -288,7 +266,7 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
     console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current} (Attempt ${retryCountRef.current + 1})`);
 
     // Generate a unique ID for this connection attempt
-    const myConnectionId = `session-${Date.now()}-${Math.random()}`;
+    const myConnectionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     connectionIdRef.current = myConnectionId;
 
     try {
@@ -299,6 +277,8 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       setDetectedLanguage('Auto-Detect');
       setTranscript('');
       conversationHistoryRef.current = []; // Reset history for new session
+      currentInputTranscriptionRef.current = '';
+      currentOutputTranscriptionRef.current = '';
       
       const currentPersona = personaRef.current;
       setTimeLeft(currentPersona.maxDurationSeconds || 120);
@@ -341,54 +321,47 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
       
       const gainNode = outputCtx.createGain();
       gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
+      gainNodeRef.current = gainNode;
       
       gainNode.connect(compressor);
       compressor.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
-      gainNodeRef.current = gainNode;
 
-      // 2. Input Pipeline (Microphone) with DSP Enhancement
-      // Enterprise noise cancellation constraints
+      // 2. Input Pipeline (Microphone)
       const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 1,
-              // Chrome-specific hints for high-quality voice
-              // @ts-ignore
-              googEchoCancellation: true,
-              // @ts-ignore
-              googNoiseSuppression: true,
-              // @ts-ignore
-              googAutoGainControl: true,
-              // @ts-ignore
-              googHighpassFilter: true
-          } 
+        audio: { 
+            sampleRate: AUDIO_CONFIG.inputSampleRate,
+            channelCount: 1,
+            echoCancellation: true,
+            autoGainControl: true,
+            noiseSuppression: true
+        } 
       });
-      
-      // Check again
-      if (connectionIdRef.current !== myConnectionId) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-      }
       streamRef.current = stream;
 
+      const source = inputCtx.createMediaStreamSource(stream);
+      sourceRef.current = source;
+      
       const inputAnalyser = inputCtx.createAnalyser();
       inputAnalyser.fftSize = 256;
-      inputAnalyser.smoothingTimeConstant = 0.5; // Smoother visualization for mic
+      inputAnalyser.smoothingTimeConstant = 0.5;
       inputAnalyserRef.current = inputAnalyser;
       
-      // --- GEMINI CONNECTION ---
+      source.connect(inputAnalyser);
+
+      const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
+      const workletUrl = URL.createObjectURL(blob);
+      await inputCtx.audioWorklet.addModule(workletUrl);
+      
+      const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
+      workletNodeRef.current = workletNode;
+      
+      inputAnalyser.connect(workletNode);
+      workletNode.connect(inputCtx.destination);
+
+      // --- GEMINI API CONNECTION ---
       const ai = new GoogleGenAI({ apiKey: currentKey });
       
-      let tools = [];
-      if (currentPersona.id === 'thabo') {
-          tools = [{ googleSearch: {} }];
-      } else {
-          tools = [...LANGUAGE_TOOL];
-      }
-
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         config: {
@@ -397,338 +370,177 @@ export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
                 voiceConfig: { prebuiltVoiceConfig: { voiceName: currentPersona.voiceName } }
             },
             systemInstruction: currentPersona.baseInstruction,
-            tools: tools,
-            outputAudioTranscription: {}, 
-            inputAudioTranscription: {}, 
+            tools: LANGUAGE_TOOL,
+            inputAudioTranscription: { model: 'gemini-2.5-flash-native-audio-preview-09-2025' },
+            outputAudioTranscription: { model: 'gemini-2.5-flash-native-audio-preview-09-2025' }
         },
         callbacks: {
-          onopen: async () => {
-            console.log('[BuaX1] WebSocket Opened');
-            if (connectionIdRef.current !== myConnectionId) return; // Stale connection
-
-            // MARK: Gate Open
-            isConnectedRef.current = true;
-            setStatus('connected');
-            retryCountRef.current = 0; // Success! Reset retries.
-            lastUserSpeechTimeRef.current = Date.now();
-
-            // Demo Timer
-            demoTimerRef.current = window.setInterval(() => {
-                setTimeLeft(prev => {
-                    if (prev <= 1) {
-                         disconnect("Demo time limit reached.");
-                         return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-            
-            // Silence Check
-            silenceCheckIntervalRef.current = window.setInterval(() => {
-                const now = Date.now();
-                if (isMicMutedRef.current || activeSourcesRef.current.size > 0) {
-                    lastUserSpeechTimeRef.current = now; 
-                    return;
-                }
-                if (now - lastUserSpeechTimeRef.current > 60000) { 
-                     disconnect("Chat ended due to extended silence.");
-                }
-            }, 1000);
-
-            // Audio Processing Setup with AudioWorklet
-            try {
-                // Initialize Worklet
-                // Use a Blob to create a worker file on the fly
-                // 'application/javascript; charset=utf-8' is safer for strict browsers
-                const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
-                const blobUrl = URL.createObjectURL(blob);
+            onopen: () => {
+                if (connectionIdRef.current !== myConnectionId) return;
+                console.log('[BuaX1] Session Connected.');
+                setStatus('connected');
+                isConnectedRef.current = true;
                 
-                try {
-                    await inputCtx.audioWorklet.addModule(blobUrl);
-                } catch (moduleErr) {
-                    console.error("[BuaX1] Failed to add worklet module:", moduleErr);
-                    throw new Error("Audio engine failed to load.");
-                } finally {
-                    // Always revoke the URL to prevent memory leaks
-                    URL.revokeObjectURL(blobUrl);
-                }
-
-                // --- DSP INPUT CHAIN ---
-                // 1. Source
-                const source = inputCtx.createMediaStreamSource(stream);
-                
-                // 2. High-pass Filter (Remove rumble/wind/thuds < 85Hz)
-                const lowCut = inputCtx.createBiquadFilter();
-                lowCut.type = 'highpass';
-                lowCut.frequency.value = 85; 
-
-                // 3. Dynamics Compressor (Boost quiet voice, clamp loud bursts)
-                // This gives "Podcast Quality" consistency
-                const inputCompressor = inputCtx.createDynamicsCompressor();
-                inputCompressor.threshold.value = -30; // Start compressing early
-                inputCompressor.knee.value = 40;       // Soft knee
-                inputCompressor.ratio.value = 12;      // High compression for consistent levels
-                inputCompressor.attack.value = 0;      // Instant attack
-                inputCompressor.release.value = 0.25;  // Fast release
-
-                // 4. Worklet
-                const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
-
-                // Handle internal processor errors
-                workletNode.onprocessorerror = (err) => {
-                    console.error("[BuaX1] Worklet Processor Error:", err);
-                    // If the processor crashes, we can't continue audio capture
-                    disconnect("Audio processor crashed.");
-                };
-
-                workletNode.port.onmessage = (event) => {
-                    // 1. Synchronous Gate Check
-                    if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
-
-                    const inputData = event.data as Float32Array; // Explicit cast
-
-                    // Mute logic: Zero out the buffer if mic is muted
-                    if (isMicMutedRef.current) {
-                        for(let i=0; i<inputData.length; i++) inputData[i] = 0;
-                    }
-
-                    // Strict VAD
-                    if (hasSpeech(inputData) && !isMicMutedRef.current) {
-                        lastUserSpeechTimeRef.current = Date.now();
-                        setTranscript(''); 
-                    }
-
-                    const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
-                    
-                    sessionPromise.then(session => {
-                        // 2. Gate Check again inside Promise
-                        if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
-                        
-                        try {
-                            session.sendRealtimeInput({ media: pcmBlob } as any);
-                        } catch(e) {
-                            // Suppress send errors if connection is dropping
+                demoTimerRef.current = window.setInterval(() => {
+                    setTimeLeft((prev) => {
+                        if (prev <= 1) {
+                            disconnect("Demo time limit reached.");
+                            return 0;
                         }
+                        return prev - 1;
                     });
-                };
+                }, 1000);
+            },
+            onmessage: async (msg: LiveServerMessage) => {
+                if (connectionIdRef.current !== myConnectionId) return;
 
-                // Connect the chain: Source -> HighPass -> Compressor -> Analyser -> Worklet
-                source.connect(lowCut);
-                lowCut.connect(inputCompressor);
-                inputCompressor.connect(inputAnalyser); 
-                inputCompressor.connect(workletNode);
-                
-                // IMPORTANT: Worklet needs a sink to function (clock signal), BUT we don't want to hear ourself.
-                // So we connect it to a dummy gain node with 0 volume, then to destination.
-                // This prevents the audio graph from being garbage collected or paused.
-                const muteGain = inputCtx.createGain();
-                muteGain.gain.value = 0;
-                workletNode.connect(muteGain);
-                muteGain.connect(inputCtx.destination);
-                
-                sourceRef.current = source;
-                workletNodeRef.current = workletNode;
-
-            } catch (err) {
-                console.error("[BuaX1] Worklet Setup Failed", err);
-                disconnect("Audio subsystem failed. Please refresh.");
-            }
-          },
-          onmessage: async (msg: LiveServerMessage) => {
-             if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
-
-             const currentEpoch = interruptionEpochRef.current;
-             lastUserSpeechTimeRef.current = Date.now();
-
-             // Transcript & History Buffering
-             if (msg.serverContent?.outputTranscription?.text) {
-                 const txt = msg.serverContent.outputTranscription.text;
-                 setTranscript(prev => prev + txt);
-                 conversationHistoryRef.current.push({
-                     role: 'model',
-                     text: txt,
-                     timestamp: Date.now()
-                 });
-             }
-             
-             if (msg.serverContent?.inputTranscription?.text) {
-                 const txt = msg.serverContent.inputTranscription.text;
-                 conversationHistoryRef.current.push({
-                     role: 'user',
-                     text: txt,
-                     timestamp: Date.now()
-                 });
-             }
-
-             // Tool Calls
-             if (msg.toolCall) {
-                const calls = msg.toolCall.functionCalls;
-                if (calls?.length) {
-                    const call = calls[0];
-                    if (call.name === 'report_language_change') {
-                        interruptionEpochRef.current += 1;
-                        activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
-                        activeSourcesRef.current.clear();
-                        if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
-
-                        const lang = call.args ? (call.args['language'] as string) : null;
-                        if (lang) setDetectedLanguage(lang);
-
-                        const isSame = lang === detectedLanguageRef.current;
-                        const responseContent = isSame
-                            ? `[SYSTEM: MONITORING. You are correctly speaking ${lang}.]`
-                            : `[SYSTEM: SWITCH to ${lang}. Acknowledge change. FORCE Accent.]`;
-
-                        sessionPromise.then(session => {
-                            if (!isConnectedRef.current) return;
-                            try {
-                                session.sendToolResponse({
-                                    functionResponses: [{
-                                        id: call.id,
-                                        name: call.name,
-                                        response: { result: responseContent }
-                                    }]
-                                });
-                            } catch(e){}
-                        });
+                // Handle Audio
+                const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                if (audioData) {
+                    try {
+                        const audioBuffer = await decodeAudioData(
+                            base64ToUint8Array(audioData),
+                            outputCtx,
+                            AUDIO_CONFIG.outputSampleRate,
+                            1
+                        );
+                        
+                        nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+                        
+                        const source = outputCtx.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(gainNode);
+                        
+                        source.onended = () => {
+                            activeSourcesRef.current.delete(source);
+                        };
+                        
+                        source.start(nextStartTimeRef.current);
+                        nextStartTimeRef.current += audioBuffer.duration;
+                        activeSourcesRef.current.add(source);
+                    } catch (e) {
+                        console.error("Audio decoding error", e);
                     }
                 }
-             }
 
-             // Interruption
-             if (msg.serverContent?.interrupted) {
-                interruptionEpochRef.current += 1;
-                activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
-                activeSourcesRef.current.clear();
-                setTranscript(''); // Clear text on model interrupt
-                if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
-                return;
-             }
-             
-             // Audio Output
-             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-             if (audioData && outputCtx && gainNodeRef.current && outputCtx.state !== 'closed') {
-                 try {
-                    const rawBytes = base64ToUint8Array(audioData);
-                    // Cast to any to avoid "Uint8Array<ArrayBufferLike> not assignable to Uint8Array<ArrayBuffer>"
-                    const audioBuffer = await decodeAudioData(rawBytes as any, outputCtx, AUDIO_CONFIG.outputSampleRate, 1);
+                // Handle Transcription
+                const serverContent = msg.serverContent;
+                if (serverContent) {
+                    if (serverContent.outputTranscription?.text) {
+                        currentOutputTranscriptionRef.current += serverContent.outputTranscription.text;
+                    }
+                    if (serverContent.inputTranscription?.text) {
+                        currentInputTranscriptionRef.current += serverContent.inputTranscription.text;
+                    }
 
-                    if (currentEpoch !== interruptionEpochRef.current) return;
-
-                    const source = outputCtx.createBufferSource();
-                    source.buffer = audioBuffer;
-                    source.connect(gainNodeRef.current);
-                    
-                    const startTime = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-                    source.start(startTime);
-                    nextStartTimeRef.current = startTime + audioBuffer.duration;
-                    
-                    activeSourcesRef.current.add(source);
-                    source.onended = () => activeSourcesRef.current.delete(source);
-                 } catch (err) {
-                     // console.error(err);
-                 }
-             }
-          },
-          onclose: () => {
-            console.log('[BuaX1] WebSocket Closed');
-            // Gate Close
-            isConnectedRef.current = false;
-            
-            if (connectionIdRef.current !== myConnectionId) return; // Ignore if already reset
-
-            const duration = Date.now() - connectStartTimeRef.current;
-            const isImmediateFailure = duration < 4000;
-
-            // SCENARIO 1: Immediate Failure (Likely Quota or Key Issue)
-            if (isImmediateFailure) {
-                if (currentKeyIndexRef.current < apiKeys.length - 1) {
-                    console.warn(`[BuaX1] Quota Limit detected. Rotating API Key ${currentKeyIndexRef.current} -> ${currentKeyIndexRef.current + 1}`);
-                    currentKeyIndexRef.current += 1;
-                    retryCountRef.current = 0; // Reset retries for new key
-                    stopAudio();
-                    setTimeout(() => { if (connectRef.current) connectRef.current(); }, 1000);
-                    return;
+                    if (serverContent.turnComplete) {
+                        const userText = currentInputTranscriptionRef.current.trim();
+                        const modelText = currentOutputTranscriptionRef.current.trim();
+                        
+                        if (userText) {
+                            conversationHistoryRef.current.push({
+                                role: 'user',
+                                text: userText,
+                                timestamp: Date.now()
+                            });
+                        }
+                        if (modelText) {
+                            conversationHistoryRef.current.push({
+                                role: 'model',
+                                text: modelText,
+                                timestamp: Date.now()
+                            });
+                            setTranscript(modelText);
+                        }
+                        
+                        currentInputTranscriptionRef.current = '';
+                        currentOutputTranscriptionRef.current = '';
+                    }
                 }
-            }
-            
-            // SCENARIO 2: Transient Network Failure (Retry same key)
-            if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
-                 if (retryCountRef.current < MAX_RETRIES) {
-                     const delay = calculateBackoff(retryCountRef.current);
-                     console.warn(`[BuaX1] Connection lost. Retrying in ${delay}ms... (Attempt ${retryCountRef.current + 1}/${MAX_RETRIES})`);
-                     retryCountRef.current += 1;
-                     stopAudio();
-                     
-                     setTimeout(() => { 
-                         if (connectRef.current && !isIntentionalDisconnectRef.current) connectRef.current(); 
-                     }, delay);
-                     return;
-                 }
-            }
 
-            // SCENARIO 3: Fatal Error or Max Retries Reached
-            if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
-                 // Tripswitch: Send transcript on fatal drop
-                 dispatchTranscript();
+                // Handle Tool Calls (Language Detection)
+                if (msg.toolCall) {
+                   for (const call of msg.toolCall.functionCalls) {
+                       if (call.name === 'report_language_change') {
+                           const lang = (call.args as any).language;
+                           setDetectedLanguage(lang);
+                           // Send response back
+                           sessionPromise.then(session => session.sendToolResponse({
+                               functionResponses: [{
+                                   id: call.id,
+                                   name: call.name,
+                                   response: { result: 'ok' }
+                               }]
+                           }));
+                       }
+                   }
+                }
 
-                 let msg = "Connection interrupted.";
-                 if (isImmediateFailure) {
-                     msg = "Connection rejected. Please check API Quota.";
-                 } else if (retryCountRef.current >= MAX_RETRIES) {
-                     msg = "Unstable connection. Max retries exceeded.";
-                 }
-                 
-                 setError(msg);
-                 setStatus('error');
-            } else if (isIntentionalDisconnectRef.current) {
-                 setStatus('disconnected');
+                // Handle Interruption
+                if (serverContent?.interrupted) {
+                    console.log('[BuaX1] Interruption detected');
+                    activeSourcesRef.current.forEach(src => {
+                        try { src.stop(); } catch(e){}
+                    });
+                    activeSourcesRef.current.clear();
+                    nextStartTimeRef.current = outputCtx.currentTime;
+                    currentOutputTranscriptionRef.current = ''; 
+                }
+            },
+            onclose: (e) => {
+                if (!isIntentionalDisconnectRef.current) {
+                    console.warn('[BuaX1] Session closed unexpectedly:', e);
+                    disconnect(); 
+                }
+            },
+            onerror: (err) => {
+                 console.error('[BuaX1] Session Error:', err);
+                 disconnect(err.message);
             }
-            
-            stopAudio();
-          },
-          onerror: (err) => {
-            if (connectionIdRef.current !== myConnectionId) return;
-            isConnectedRef.current = false;
-            
-            console.error("[BuaX1] Session Error", err);
-            
-            // Don't show error UI immediately if we have retries left
-            if (retryCountRef.current < MAX_RETRIES) {
-               return;
-            }
-
-            dispatchTranscript(); 
-
-            setError("Connection failed. Please check your network.");
-            setStatus('error');
-            stopAudio();
-          }
         }
       });
-
+      
       sessionRef.current = sessionPromise;
 
-    } catch (err: any) {
-      if (connectionIdRef.current === myConnectionId) {
-          console.error('[BuaX1] Setup Error:', err);
-          setStatus('error');
-          setError(err.message || "Failed to initialize audio.");
-          stopAudio();
-      }
-    }
-  }, [apiKeys, stopAudio, disconnect, dispatchTranscript]);
+      workletNode.port.onmessage = (event) => {
+          if (isConnectedRef.current && !isMicMutedRef.current) {
+               const inputBuffer = event.data;
+               
+               if (hasSpeech(inputBuffer)) {
+                   lastUserSpeechTimeRef.current = Date.now();
+               }
 
+               const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
+               
+               sessionPromise.then(session => {
+                   session.sendRealtimeInput({ media: pcmBlob });
+               }).catch(e => {
+                   // ignore send errors
+               });
+          }
+      };
+
+    } catch (err: any) {
+        console.error("Connection failed", err);
+        setStatus('error');
+        setError(err.message || "Failed to connect");
+        stopAudio();
+    }
+  }, [apiKeys, persona, stopAudio, disconnect]);
+
+  // Clean up on unmount
   useEffect(() => {
-      connectRef.current = connect;
-  }, [connect]);
+    return () => {
+        stopAudio();
+    };
+  }, [stopAudio]);
 
   return {
     status,
     connect,
-    disconnect: () => disconnect(), 
-    inputAnalyserRef, // RETURN REF
-    outputAnalyserRef, // RETURN REF
+    disconnect,
+    inputAnalyserRef,
+    outputAnalyserRef,
     detectedLanguage,
     transcript,
     error,
