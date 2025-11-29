@@ -6,7 +6,7 @@ import AudioVisualizer from './AudioVisualizer';
 import { 
   X, Mic, MicOff, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail
 } from 'lucide-react';
 
 // --- VOICE UI KIT PRIMITIVES ---
@@ -22,6 +22,7 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
     case 'sun': return <Sun {...props} />;
     case 'sparkles': return <Sparkles {...props} />;
     case 'life-buoy': return <LifeBuoy {...props} />;
+    case 'scale': return <Scale {...props} />;
     default: return <User {...props} />;
   }
 };
@@ -55,7 +56,7 @@ const ControlBtn: React.FC<ControlBtnProps> = ({
     let colorClass = "bg-gray-800 text-white hover:bg-gray-700"; 
     
     if (variant === 'danger') {
-        colorClass = "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20";
+        colorClass = "bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red500/20";
     } else if (variant === 'primary' && active) {
         colorClass = "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20";
     } else if (variant === 'default' && active) {
@@ -81,9 +82,16 @@ const ControlBtn: React.FC<ControlBtnProps> = ({
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showStage, setShowStage] = useState(false); // Latch state for the stage view
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
   const [playingPreview, setPlayingPreview] = useState<string | null>(null);
   const [showCaptions, setShowCaptions] = useState(true);
+  
+  // Mandatory Email State
+  const [userEmail, setUserEmail] = useState('');
+  const [isEmailValid, setIsEmailValid] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+
   const apiKey = process.env.API_KEY;
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
@@ -91,9 +99,27 @@ export const ChatWidget: React.FC = () => {
   const { status, connect, disconnect, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
+    userEmail: userEmail,
   });
 
   const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
+
+  // Effect to manage the "Stage Latch"
+  useEffect(() => {
+    if (status === 'connected' || status === 'connecting') {
+        setShowStage(true);
+    } else if (!isOpen) {
+        // Only reset stage when widget fully closes
+        const t = setTimeout(() => setShowStage(false), 500);
+        return () => clearTimeout(t);
+    }
+  }, [status, isOpen]);
+
+  // Validate Email
+  useEffect(() => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    setIsEmailValid(emailRegex.test(userEmail));
+  }, [userEmail]);
 
   // Handle Smooth Closing and Auto-Scroll to Console
   const handleDisconnect = () => {
@@ -176,7 +202,8 @@ export const ChatWidget: React.FC = () => {
   const animationClass = isClosing ? "opacity-0 scale-95 translate-y-4" : "opacity-100 scale-100 translate-y-0";
 
   // --- VIEW: CONNECTED (VOICE STAGE) ---
-  if ((status === 'connected' || status === 'connecting') && isOpen) {
+  // Show stage if we are connected OR if we are latched (during closing animation)
+  if ((status === 'connected' || status === 'connecting' || showStage) && isOpen) {
       return (
         <div className={`fixed bottom-6 right-6 z-50 flex flex-col items-center origin-bottom-right font-sans transition-all duration-300 ease-in-out ${animationClass}`}>
              
@@ -286,14 +313,14 @@ export const ChatWidget: React.FC = () => {
                   </div>
                   <div className="flex flex-col leading-none">
                       <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">COMPLIANCE</span>
-                      <span className="text-sm font-medium">Transcript sent to <span className="text-white font-bold">tommy@vcb-ai.online</span></span>
+                      <span className="text-sm font-medium">Transcript sent to <span className="text-white font-bold">{userEmail}</span></span>
                   </div>
               </div>
           </div>
       )}
 
       {/* Backdrop */}
-      {isOpen && status !== 'connected' && status !== 'connecting' && (
+      {isOpen && !showStage && (
         <div 
           className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 ${isClosing ? 'opacity-0' : 'opacity-100'}`} 
           onClick={toggleWidget}
@@ -301,7 +328,7 @@ export const ChatWidget: React.FC = () => {
       )}
 
       {/* Modal */}
-      {isOpen && status !== 'connected' && status !== 'connecting' && (
+      {isOpen && !showStage && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none transition-all duration-300 ${isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
           <div className="pointer-events-auto bg-[#FAFAFA] w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-white/50">
             
@@ -383,18 +410,55 @@ export const ChatWidget: React.FC = () => {
                 </div>
             </div>
 
-            <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 z-20 pointer-events-none">
-                 <div className="max-w-xl mx-auto pointer-events-auto">
+            {/* Sticky Footer for Input & Action */}
+            <div className="absolute bottom-0 inset-x-0 p-6 bg-white border-t border-gray-100 z-20">
+                 <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-4 items-center">
+                    
+                    {/* Email Input */}
+                    <div className="relative w-full md:flex-1 group">
+                         <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                             <Mail size={16} className={`transition-colors ${isEmailValid ? 'text-emerald-500' : 'text-gray-400'}`} />
+                         </div>
+                         <input
+                            type="email"
+                            placeholder="Enter your email to start..."
+                            value={userEmail}
+                            onChange={(e) => { setUserEmail(e.target.value); setEmailTouched(true); }}
+                            className={`w-full pl-10 pr-4 py-3.5 bg-gray-50 border rounded-xl text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 transition-all
+                                ${emailTouched && !isEmailValid 
+                                    ? 'border-red-200 focus:border-red-500 focus:ring-red-100' 
+                                    : isEmailValid 
+                                        ? 'border-emerald-200 focus:border-emerald-500 focus:ring-emerald-100' 
+                                        : 'border-gray-200 focus:border-black focus:ring-gray-100'
+                                }
+                            `}
+                         />
+                         {emailTouched && !isEmailValid && (
+                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-red-500 font-bold uppercase tracking-wider bg-red-50 px-2 py-1 rounded">
+                                 Required
+                             </span>
+                         )}
+                    </div>
+
+                    {/* Action Button */}
                     <button
                         onClick={() => { connect(); }}
-                        className="w-full py-4 bg-[#18181b] hover:bg-black text-white rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 active:scale-[0.99] flex items-center justify-center gap-3 group"
+                        disabled={!isEmailValid}
+                        className={`w-full md:w-auto px-8 py-3.5 rounded-xl shadow-xl transition-all transform flex items-center justify-center gap-3 group whitespace-nowrap
+                            ${isEmailValid 
+                                ? 'bg-[#18181b] hover:bg-black text-white hover:-translate-y-0.5 active:scale-[0.99] cursor-pointer' 
+                                : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none border border-gray-200'
+                            }
+                        `}
                     >
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
+                        {isEmailValid && (
+                            <span className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                        )}
                         <span className="font-bold tracking-wide">INITIALIZE {selectedPersona.name.toUpperCase()}</span>
-                        <ArrowUpRight size={18} className="text-gray-400 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        <ArrowUpRight size={18} className={`transition-transform ${isEmailValid ? 'group-hover:translate-x-1 group-hover:-translate-y-1' : ''}`} />
                     </button>
                  </div>
             </div>
