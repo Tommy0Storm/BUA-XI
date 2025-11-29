@@ -1,400 +1,733 @@
-import React, { useState, useMemo } from 'react';
-import { useGeminiLive } from '../hooks/useGeminiLive';
-import { PERSONAS } from '../constants';
-import AudioVisualizer from './AudioVisualizer';
-import { 
-  X, Mic, MicOff, Volume2, VolumeX, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Clock, Play, BarChart2,
-  Loader2, AlertCircle, RefreshCw, LifeBuoy, Radio, ArrowUpRight, Captions, CheckCircle2, MoreHorizontal
-} from 'lucide-react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
+import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
+import { createPcmBlob, decodeAudioData, base64ToUint8Array, hasSpeech } from '../utils/audioUtils';
+import { ConnectionStatus, Persona } from '../types';
 
-// --- UI KIT COMPONENTS ---
+export interface UseGeminiLiveProps {
+  apiKey: string | undefined;
+  persona: Persona;
+}
 
-// 1. Icon Helper
-const getPersonaIcon = (iconKey: string, size: number = 24, className: string = "") => {
-  const props = { size, className, strokeWidth: 1.5 }; 
-  switch (iconKey) {
-    case 'briefcase': return <Briefcase {...props} />;
-    case 'zap': return <Zap {...props} />;
-    case 'scroll': return <Scroll {...props} />;
-    case 'target': return <Target {...props} />;
-    case 'sun': return <Sun {...props} />;
-    case 'sparkles': return <Sparkles {...props} />;
-    case 'life-buoy': return <LifeBuoy {...props} />;
-    default: return <User {...props} />;
+const VOLUME_GAIN = 1.5;
+const MAX_RETRIES = 3;
+
+// Audio Worklet Code to run in a separate thread
+const WORKLET_CODE = `
+class PCMProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 4096;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.index = 0;
   }
-};
 
-// 2. Sentence Parser for Cinematic Transcript
-const getLastSentence = (text: string): string => {
-    if (!text) return "";
-    const matches = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g);
-    if (!matches || matches.length === 0) return text;
-    return matches[matches.length - 1].trim();
-};
-
-// 3. Control Button Component
-const ControlBtn = ({ 
-    active, 
-    onClick, 
-    onIcon, 
-    offIcon, 
-    variant = 'default',
-    label 
-}: { 
-    active: boolean; 
-    onClick: () => void; 
-    onIcon: React.ReactNode; 
-    offIcon: React.ReactNode; 
-    variant?: 'default' | 'danger' | 'primary';
-    label?: string;
-}) => {
-    const baseClass = "h-12 w-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm relative group";
-    const variants = {
-        default: active 
-            ? "bg-white text-black hover:bg-gray-200" 
-            : "bg-gray-800 text-white hover:bg-gray-700",
-        primary: active
-            ? "bg-emerald-500 text-white shadow-emerald-500/25 shadow-lg"
-            : "bg-gray-800 text-white hover:bg-gray-700",
-        danger: "bg-red-500 text-white hover:bg-red-600 shadow-red-500/25 shadow-lg"
-    };
-
-    return (
-        <button onClick={onClick} className={`${baseClass} ${variants[variant]}`}>
-            {active ? onIcon : offIcon}
-            {label && (
-                <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                    {label}
-                </span>
-            )}
-        </button>
-    );
-};
-
-export const ChatWidget: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(PERSONAS[0].id);
-  const [playingPreview, setPlayingPreview] = useState<string | null>(null);
-  const [showCaptions, setShowCaptions] = useState(true);
-  const apiKey = process.env.API_KEY;
-
-  const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
-
-  const { status, connect, disconnect, volume, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent } = useGeminiLive({
-    apiKey,
-    persona: selectedPersona,
-  });
-
-  const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
-
-  const toggleWidget = () => {
-    if (isOpen) {
-      if (status === 'connected') disconnect();
-      setIsOpen(false);
-    } else {
-      setIsOpen(true);
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    if (input.length > 0) {
+      const channelData = input[0];
+      for (let i = 0; i < channelData.length; i++) {
+        this.buffer[this.index++] = channelData[i];
+        if (this.index >= this.bufferSize) {
+          this.port.postMessage(this.buffer);
+          this.index = 0;
+        }
+      }
     }
-  };
-
-  const handlePersonaSelect = (id: string) => {
-    setSelectedPersonaId(id);
-  };
-
-  // --- AUDIO PREVIEW LOGIC ---
-  const playPreview = (personaId: string, gender: string, e: React.MouseEvent) => {
-      e.stopPropagation(); 
-      if (playingPreview) return;
-
-      setPlayingPreview(personaId);
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const baseFreq = gender === 'Male' ? 130 : 220;
-      
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(baseFreq - 20, ctx.currentTime + 0.5);
-      
-      gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 1.2);
-      
-      setTimeout(() => {
-          setPlayingPreview(null);
-          ctx.close();
-      }, 1200);
-  };
-
-  const formattedTime = useMemo(() => {
-      const minutes = Math.floor(timeLeft / 60);
-      const seconds = timeLeft % 60;
-      return `${minutes < 10 ? `0${minutes}` : minutes}:${seconds < 10 ? `0${seconds}` : seconds}`;
-  }, [timeLeft]);
-
-  const isTimeLow = timeLeft <= 30;
-
-  // --- VIEW: CONNECTED (VOICE STAGE) ---
-  if ((status === 'connected' || status === 'connecting') && isOpen) {
-      return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-center animate-fade-in-up origin-bottom-right font-sans">
-             
-             {/* Main Container - The "Stage" */}
-             <div className="w-[24rem] h-[38rem] bg-[#09090b] rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col border border-white/10 ring-1 ring-black/50">
-                
-                {/* 1. Header Bar */}
-                <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
-                    <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
-                        <div className={`w-2 h-2 rounded-full ${status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
-                        <span className={`text-xs font-mono font-medium ${isTimeLow ? 'text-red-400' : 'text-gray-300'}`}>
-                            {status === 'connecting' ? 'CONNECTING' : formattedTime}
-                        </span>
-                    </div>
-                    
-                    <button onClick={toggleWidget} className="p-2 text-white/50 hover:text-white transition-colors">
-                        <X size={20} strokeWidth={1.5} />
-                    </button>
-                </div>
-
-                {/* 2. The Visualizer Stage */}
-                <div className="flex-1 flex flex-col items-center justify-center relative bg-grid-pattern">
-                     {/* Ambient Glow */}
-                     <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full blur-[80px] opacity-20 pointer-events-none transition-colors duration-1000 ${selectedPersona.gender === 'Male' ? 'bg-emerald-600' : 'bg-amber-600'}`}></div>
-
-                     {/* Avatar & Visualizer */}
-                     <div className="relative w-72 h-72 flex items-center justify-center">
-                         <div className="absolute inset-0">
-                             <AudioVisualizer 
-                                 isActive={!isMicMuted && status === 'connected'} 
-                                 volume={volume} 
-                                 mode="circle"
-                                 color={selectedPersona.gender === 'Male' ? '#10b981' : '#f59e0b'} 
-                             />
-                         </div>
-                         
-                         {/* Persona Avatar */}
-                         <div className="relative z-10 w-24 h-24 rounded-full bg-[#18181b] flex items-center justify-center shadow-2xl border border-white/10">
-                              {getPersonaIcon(selectedPersona.icon, 40, selectedPersona.gender === 'Male' ? "text-emerald-400" : "text-amber-400")}
-                         </div>
-                     </div>
-
-                     {/* Cinematic Transcript Overlay */}
-                     <div className="absolute bottom-28 left-0 right-0 px-8 min-h-[4rem] flex flex-col items-center justify-end z-10">
-                        {!activeSubtitle || !showCaptions ? (
-                            <div className="text-center space-y-1 animate-fade-in">
-                                <h3 className="text-xl font-semibold text-white tracking-tight">{selectedPersona.name}</h3>
-                                <p className="text-xs text-white/40 uppercase tracking-widest font-medium">{selectedPersona.role}</p>
-                            </div>
-                        ) : (
-                            <div className="w-full text-center animate-fade-up">
-                                <p className="text-lg font-medium text-white/90 leading-snug drop-shadow-md">
-                                    "{activeSubtitle}"
-                                </p>
-                            </div>
-                        )}
-                     </div>
-                </div>
-
-                {/* 3. The Control Capsule */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
-                     <div className="flex items-center gap-3 px-4 py-3 bg-[#18181b]/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
-                         
-                         {/* Mic Toggle */}
-                         <ControlBtn 
-                            active={!isMicMuted}
-                            onClick={toggleMic}
-                            variant={isMicMuted ? 'default' : 'primary'}
-                            onIcon={<Mic size={20} />}
-                            offIcon={<MicOff size={20} className="text-red-400" />}
-                            label={isMicMuted ? "Unmute" : "Mute"}
-                         />
-
-                         {/* Captions Toggle */}
-                         <ControlBtn 
-                            active={showCaptions}
-                            onClick={() => setShowCaptions(!showCaptions)}
-                            variant="default"
-                            onIcon={<Captions size={20} />}
-                            offIcon={<Captions size={20} className="opacity-40" />}
-                            label="Captions"
-                         />
-
-                         {/* Disconnect (Danger) */}
-                         <ControlBtn 
-                            active={true}
-                            onClick={() => disconnect()}
-                            variant="danger"
-                            onIcon={<LogOut size={20} />}
-                            offIcon={<LogOut size={20} />}
-                            label="End Call"
-                         />
-                     </div>
-                </div>
-
-             </div>
-        </div>
-      );
+    return true;
   }
+}
+registerProcessor('pcm-processor', PCMProcessor);
+`;
 
-  // --- VIEW: SELECTION (LAUNCHPAD MODAL) ---
-  return (
-    <div className="font-sans">
+interface TranscriptEntry {
+    role: 'user' | 'model' | 'system';
+    text: string;
+    timestamp: number;
+}
+
+export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
+  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [volume, setVolume] = useState(0);
+  const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
+  const [transcript, setTranscript] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(120);
+  const [transcriptSent, setTranscriptSent] = useState(false);
+
+  // API Key Management
+  const apiKeys = useMemo(() => 
+    apiKey ? apiKey.split(',').map(k => k.trim()).filter(k => k.length > 0) : [], 
+  [apiKey]);
+  const currentKeyIndexRef = useRef(0);
+  const retryCountRef = useRef(0);
+
+  // Refs for audio management
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const inputContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const inputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  
+  // Reusable buffers
+  const inputDataArrayRef = useRef<Uint8Array | null>(null);
+  const outputDataArrayRef = useRef<Uint8Array | null>(null);
+  const volumeAnimationRef = useRef<number | null>(null);
+
+  const nextStartTimeRef = useRef<number>(0);
+  const sessionRef = useRef<Promise<any> | null>(null);
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  
+  const interruptionEpochRef = useRef<number>(0);
+  const demoTimerRef = useRef<number | null>(null);
+  const personaRef = useRef<Persona>(persona);
+  const isMutedRef = useRef(isMuted);
+  const isMicMutedRef = useRef(isMicMuted);
+  const detectedLanguageRef = useRef(detectedLanguage);
+  
+  const lastUserSpeechTimeRef = useRef<number>(Date.now());
+  const silenceCheckIntervalRef = useRef<number | null>(null);
+  
+  // --- STATE CONTROL REFS ---
+  const connectionIdRef = useRef<string | null>(null);
+  const isIntentionalDisconnectRef = useRef<boolean>(false);
+  const statusRef = useRef<ConnectionStatus>('disconnected');
+  const connectStartTimeRef = useRef<number>(0);
+  const conversationHistoryRef = useRef<TranscriptEntry[]>([]);
+  
+  // Synchronous Gate: strictly tracks if we believe the socket is open
+  const isConnectedRef = useRef<boolean>(false);
+  
+  // Recursive connect reference - explicitly typed as mutable
+  const connectRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    personaRef.current = persona;
+  }, [persona]);
+
+  useEffect(() => {
+    detectedLanguageRef.current = detectedLanguage;
+  }, [detectedLanguage]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+    if (gainNodeRef.current && gainNodeRef.current.context) {
+        const ctx = gainNodeRef.current.context;
+        const currentTime = ctx.currentTime;
+        gainNodeRef.current.gain.setTargetAtTime(isMuted ? 0 : VOLUME_GAIN, currentTime, 0.05);
+    }
+  }, [isMuted]);
+
+  useEffect(() => {
+    isMicMutedRef.current = isMicMuted;
+  }, [isMicMuted]);
+
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+
+  const toggleMic = useCallback(() => {
+    setIsMicMuted(prev => !prev);
+  }, []);
+
+  const calculateBackoff = (attempt: number) => {
+    // Exponential backoff: 1s, 2s, 4s, 8s... capped at 10s
+    return Math.min(1000 * Math.pow(2, attempt), 10000);
+  };
+
+  // --- TRIPSWITCH: EMAIL DISPATCH LOGIC ---
+  const dispatchTranscript = useCallback(() => {
+    const duration = Date.now() - connectStartTimeRef.current;
+    
+    // Condition: Session must be longer than 20 seconds
+    if (duration > 20000 && conversationHistoryRef.current.length > 0) {
+        console.log(`[BuaX1] ⚡ TRIPSWITCH: Session Duration ${Math.round(duration/1000)}s > 20s. Dispatching Transcript...`);
+        
+        console.group("📧 EMAILING TRANSCRIPT TO: tommy@vcb-ai.online");
+        console.log("Subject: Bua X1 Session Transcript");
+        console.log(`Time: ${new Date().toLocaleString()}`);
+        console.log(`Duration: ${Math.round(duration/1000)}s`);
+        console.table(conversationHistoryRef.current);
+        console.groupEnd();
+
+        // Simulate Network Request Delay
+        setTimeout(() => {
+            setTranscriptSent(true);
+            // Auto-hide the notification flag after a while
+            setTimeout(() => setTranscriptSent(false), 5000);
+        }, 800);
+    } else {
+        console.log(`[BuaX1] Session ended. Duration ${Math.round(duration/1000)}s < 20s. No transcript sent.`);
+    }
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    console.log('[BuaX1] Stopping Audio Subsystems...');
+    
+    // CRITICAL: Immediate synchronous gate close
+    isConnectedRef.current = false;
+    connectionIdRef.current = null;
+    
+    // Kill the worklet
+    if (workletNodeRef.current) {
+        workletNodeRef.current.port.onmessage = null;
+        try { workletNodeRef.current.disconnect(); } catch(e) {}
+        workletNodeRef.current = null;
+    }
+
+    if (demoTimerRef.current) {
+        window.clearInterval(demoTimerRef.current);
+        demoTimerRef.current = null;
+    }
+
+    if (volumeAnimationRef.current) {
+        cancelAnimationFrame(volumeAnimationRef.current);
+        volumeAnimationRef.current = null;
+    }
+
+    if (silenceCheckIntervalRef.current) {
+        window.clearInterval(silenceCheckIntervalRef.current);
+        silenceCheckIntervalRef.current = null;
+    }
+
+    if (inputContextRef.current) {
+      try { inputContextRef.current.close(); } catch(e) {}
+      inputContextRef.current = null;
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch(e) {}
+      sourceRef.current = null;
+    }
+    
+    // Disconnect Nodes
+    [gainNodeRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
+        if (ref.current) {
+            try { ref.current.disconnect(); } catch(e) {}
+            ref.current = null;
+        }
+    });
+
+    activeSourcesRef.current.forEach(source => {
+      try { source.stop(); source.disconnect(); } catch (e) {}
+    });
+    activeSourcesRef.current.clear();
+    
+    if (audioContextRef.current) {
+        try { audioContextRef.current.close(); } catch(e) {}
+        audioContextRef.current = null;
+    }
+    
+    setVolume(0);
+    console.log('[BuaX1] Audio Stopped.');
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+      return () => {
+          stopAudio();
+      };
+  }, [stopAudio]);
+
+  const disconnect = useCallback(async (errorMessage?: string) => {
+    console.log('[BuaX1] Disconnecting session (Intentional)...');
+    
+    // Trigger Tripswitch
+    dispatchTranscript();
+
+    isIntentionalDisconnectRef.current = true;
+    isConnectedRef.current = false; // Immediate gate
+
+    if (sessionRef.current) {
+        try {
+            const session = await sessionRef.current;
+            session.close();
+        } catch (e) {
+            console.warn('[BuaX1] Error closing session:', e);
+        }
+    }
+    sessionRef.current = null;
+    
+    // State sanitation
+    setStatus('disconnected');
+    setDetectedLanguage('Auto-Detect');
+    setTranscript('');
+    retryCountRef.current = 0;
+    
+    if (errorMessage) {
+        setError(errorMessage);
+        setStatus('error');
+    }
+    
+    stopAudio();
+  }, [stopAudio, dispatchTranscript]);
+
+  const connect = useCallback(async () => {
+    if (apiKeys.length === 0) {
+      setError('API Key is missing.');
+      setStatus('error');
+      return;
+    }
+    
+    // Ensure clean slate
+    stopAudio();
+    isConnectedRef.current = false;
+    setTranscriptSent(false); // Reset sent flag
+
+    const currentKey = apiKeys[currentKeyIndexRef.current];
+    console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current} (Attempt ${retryCountRef.current + 1})`);
+
+    // Generate a unique ID for this connection attempt
+    const myConnectionId = `session-${Date.now()}-${Math.random()}`;
+    connectionIdRef.current = myConnectionId;
+
+    try {
+      setStatus('connecting');
+      setError(null);
       
-      {/* Transcript Notification Pill */}
-      {transcriptSent && (
-          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] animate-fade-in-down">
-              <div className="bg-[#18181b] text-white pl-4 pr-6 py-2.5 rounded-full shadow-2xl border border-white/10 flex items-center gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                    <CheckCircle2 size={14} className="text-emerald-500" />
-                  </div>
-                  <div className="flex flex-col leading-none">
-                      <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">COMPLIANCE</span>
-                      <span className="text-sm font-medium">Transcript sent to <span className="text-white font-bold">tommy@vcb-ai.online</span></span>
-                  </div>
-              </div>
-          </div>
-      )}
+      // Clean previous session data
+      setDetectedLanguage('Auto-Detect');
+      setTranscript('');
+      conversationHistoryRef.current = []; // Reset history for new session
+      
+      const currentPersona = personaRef.current;
+      setTimeLeft(currentPersona.maxDurationSeconds || 120);
+      
+      // Reset State Flags
+      interruptionEpochRef.current = 0;
+      isIntentionalDisconnectRef.current = false;
+      connectStartTimeRef.current = Date.now();
 
-      {/* Backdrop */}
-      {isOpen && status !== 'connected' && status !== 'connecting' && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-fade-in" onClick={toggleWidget}></div>
-      )}
+      // --- AUDIO SETUP ---
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const inputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.inputSampleRate }); 
+      const outputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.outputSampleRate });
+      
+      // Enterprise Stability: Robust context resumption
+      await Promise.all([
+          outputCtx.resume().catch(e => console.warn("Output Resume failed", e)), 
+          inputCtx.resume().catch(e => console.warn("Input Resume failed", e))
+      ]);
+      
+      // If user cancelled while we were waiting for contexts
+      if (connectionIdRef.current !== myConnectionId) return;
 
-      {/* Launcher Modal */}
-      {isOpen && status !== 'connected' && status !== 'connecting' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-          <div className="pointer-events-auto bg-[#FAFAFA] w-full max-w-6xl h-[90vh] sm:h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative animate-in fade-in zoom-in-95 duration-300 border border-white/50">
+      audioContextRef.current = outputCtx;
+      inputContextRef.current = inputCtx;
+      nextStartTimeRef.current = outputCtx.currentTime;
+
+      // 1. Output Pipeline
+      const compressor = outputCtx.createDynamicsCompressor();
+      compressor.threshold.value = -20;
+      compressor.knee.value = 30;
+      compressor.ratio.value = 3;
+      compressor.attack.value = 0.003; 
+      compressor.release.value = 0.25;
+
+      const outputAnalyser = outputCtx.createAnalyser();
+      outputAnalyser.fftSize = 256;
+      outputAnalyser.smoothingTimeConstant = 0.3;
+      outputAnalyserRef.current = outputAnalyser;
+      outputDataArrayRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
+
+      const gainNode = outputCtx.createGain();
+      gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
+      
+      gainNode.connect(compressor);
+      compressor.connect(outputAnalyser);
+      outputAnalyser.connect(outputCtx.destination);
+      gainNodeRef.current = gainNode;
+
+      // 2. Input Pipeline
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1
+          } 
+      });
+      
+      // Check again
+      if (connectionIdRef.current !== myConnectionId) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+      }
+      streamRef.current = stream;
+
+      const inputAnalyser = inputCtx.createAnalyser();
+      inputAnalyser.fftSize = 256;
+      inputAnalyser.smoothingTimeConstant = 0.3;
+      inputAnalyserRef.current = inputAnalyser;
+      inputDataArrayRef.current = new Uint8Array(inputAnalyser.frequencyBinCount);
+
+      // 3. Visualizer Loop
+      const updateVolume = () => {
+        // Strict ID check
+        if (connectionIdRef.current !== myConnectionId) return;
+
+        let maxVol = 0;
+
+        if (inputAnalyserRef.current && !isMicMutedRef.current && inputDataArrayRef.current) {
+            const data = inputDataArrayRef.current;
+            inputAnalyserRef.current.getByteTimeDomainData(data as any);
+            let sum = 0;
+            for(let i=0; i<data.length; i++) {
+                const v = (data[i] - 128) / 128;
+                sum += v*v;
+            }
+            maxVol = Math.sqrt(sum / data.length);
+        }
+
+        if (outputAnalyserRef.current && outputDataArrayRef.current) {
+             const data = outputDataArrayRef.current;
+             outputAnalyserRef.current.getByteTimeDomainData(data as any);
+             let sum = 0;
+             for(let i=0; i<data.length; i++) {
+                 const v = (data[i] - 128) / 128;
+                 sum += v*v;
+             }
+             const outVol = Math.sqrt(sum / data.length);
+             if (outVol > maxVol) maxVol = outVol;
+        }
+        
+        if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
+
+        setVolume(maxVol);
+        volumeAnimationRef.current = requestAnimationFrame(updateVolume);
+      };
+      volumeAnimationRef.current = requestAnimationFrame(updateVolume);
+
+      // --- GEMINI CONNECTION ---
+      const ai = new GoogleGenAI({ apiKey: currentKey });
+      
+      let tools = [];
+      if (currentPersona.id === 'thabo') {
+          tools = [{ googleSearch: {} }];
+      } else {
+          tools = [...LANGUAGE_TOOL];
+      }
+
+      const sessionPromise = ai.live.connect({
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: currentPersona.voiceName } }
+            },
+            systemInstruction: currentPersona.baseInstruction,
+            tools: tools,
+            outputAudioTranscription: {}, 
+            inputAudioTranscription: {}, // Capture User Speech for transcript logging
+        },
+        callbacks: {
+          onopen: async () => {
+            console.log('[BuaX1] WebSocket Opened');
+            if (connectionIdRef.current !== myConnectionId) return; // Stale connection
+
+            // MARK: Gate Open
+            isConnectedRef.current = true;
+            setStatus('connected');
+            retryCountRef.current = 0; // Success! Reset retries.
+            lastUserSpeechTimeRef.current = Date.now();
+
+            // Demo Timer
+            demoTimerRef.current = window.setInterval(() => {
+                setTimeLeft(prev => {
+                    if (prev <= 1) {
+                         disconnect("Demo time limit reached.");
+                         return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
             
-            {/* Launcher Header */}
-            <div className="bg-white border-b border-gray-100 p-6 flex justify-between items-start">
-                <div>
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">System Online</span>
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900">Select Agent</h2>
-                </div>
-                <button 
-                    onClick={toggleWidget}
-                    className="w-10 h-10 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors"
-                >
-                    <X size={20} className="text-gray-500" />
-                </button>
-            </div>
+            // Silence Check
+            silenceCheckIntervalRef.current = window.setInterval(() => {
+                const now = Date.now();
+                if (isMicMutedRef.current || activeSourcesRef.current.size > 0) {
+                    lastUserSpeechTimeRef.current = now; 
+                    return;
+                }
+                if (now - lastUserSpeechTimeRef.current > 60000) { 
+                     disconnect("Chat ended due to extended silence.");
+                }
+            }, 1000);
 
-            {/* Error State */}
-            {status === 'error' && (
-                <div className="absolute inset-0 z-50 bg-white/90 backdrop-blur-sm flex items-center justify-center p-8">
-                     <div className="text-center">
-                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertCircle size={32} className="text-red-500" />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Connection Failed</h3>
-                        <p className="text-gray-500 mb-6 max-w-xs mx-auto text-sm">{error || "Neural link unstable."}</p>
-                        <button onClick={() => connect()} className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-medium text-sm hover:bg-black transition-colors">
-                            Retry Connection
-                        </button>
-                     </div>
-                </div>
-            )}
+            // Audio Processing Setup with AudioWorklet
+            try {
+                // Initialize Worklet
+                const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
+                const blobUrl = URL.createObjectURL(blob);
+                await inputCtx.audioWorklet.addModule(blobUrl);
+                URL.revokeObjectURL(blobUrl);
 
-            {/* Agent Grid */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-24">
-                    {PERSONAS.map(persona => {
-                        const isSelected = selectedPersonaId === persona.id;
-                        return (
-                            <button
-                                key={persona.id}
-                                onClick={() => handlePersonaSelect(persona.id)}
-                                className={`group relative p-5 rounded-2xl border text-left transition-all duration-200 
-                                    ${isSelected 
-                                        ? 'bg-white border-gray-900 shadow-xl ring-1 ring-gray-900/5' 
-                                        : 'bg-white border-gray-100 hover:border-gray-300 hover:shadow-md'
-                                    }
-                                `}
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors
-                                        ${isSelected ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-400'}
-                                    `}>
-                                        {getPersonaIcon(persona.icon, 24)}
-                                    </div>
-                                    <div 
-                                        role="button"
-                                        onClick={(e) => playPreview(persona.id, persona.gender, e)}
-                                        className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-900 transition-colors"
-                                    >
-                                        {playingPreview === persona.id ? <BarChart2 size={18} className="animate-pulse text-emerald-500" /> : <Play size={18} />}
-                                    </div>
-                                </div>
+                const source = inputCtx.createMediaStreamSource(stream);
+                const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
 
-                                <h3 className="font-bold text-gray-900 mb-1">{persona.name}</h3>
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">{persona.role}</p>
-                                <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-4">{persona.description}</p>
-                                
-                                <div className="flex flex-wrap gap-1.5">
-                                    {persona.capabilities.slice(0,3).map((cap, i) => (
-                                        <span key={i} className="px-2 py-1 bg-gray-50 text-gray-500 text-[10px] font-medium rounded border border-gray-100">
-                                            {cap}
-                                        </span>
-                                    ))}
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
+                workletNode.port.onmessage = (event) => {
+                    // 1. Synchronous Gate Check
+                    if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
 
-            {/* Sticky Footer Action */}
-            <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-white via-white to-transparent pt-12 z-20 pointer-events-none">
-                 <div className="max-w-xl mx-auto pointer-events-auto">
-                    <button
-                        onClick={connect}
-                        className="w-full py-4 bg-[#18181b] hover:bg-black text-white rounded-xl shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 active:scale-[0.99] flex items-center justify-center gap-3 group"
-                    >
-                        <span className="relative flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                        </span>
-                        <span className="font-bold tracking-wide">INITIALIZE {selectedPersona.name.toUpperCase()}</span>
-                        <ArrowUpRight size={18} className="text-gray-400 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    </button>
-                 </div>
-            </div>
-          </div>
-        </div>
-      )}
+                    const inputData = event.data; // Float32Array from worklet
 
-      {/* Floating Trigger Pill */}
-      {!isOpen && (
-        <di/div>
-        </div>
-      )}
+                    // Mute logic: Zero out the buffer if mic is muted
+                    if (isMicMutedRef.current) {
+                        for(let i=0; i<inputData.length; i++) inputData[i] = 0;
+                    }
 
-      {/* Floating Trigger Pill */}
-      {!isOpen && (
-        <div className="fixed bottom-8 right-8 z-50">
-            <button
-                onClick={toggleWidget}
-                className="pl-4 pr-5 py-3 bg-[#18181b] text-white rounded-full shadow-2xl hover:shadow-[0_10px_30px_rgba(0,0,0,0.4)] flex items-center justify-center hover:scale-105 active:scale-95 transition-all group"
-            >
-                <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center mr-3">
-                     <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                </div>
-                <div className="flex flex-col items-start leading-none mr-2">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Voice OS</span>
-                    <span className="text-sm font-bold">Start Demo</span>
-                </div>
-                <ChevronRight size={16} className="text-gray-500 group-hover:text-white group-hover:translate-x-1 transition-transform" />
-            </button>
-        </div>
-      )}
-    </div>
-  );
-};
+                    // Strict VAD: If speech is detected, user is interrupting.
+                    // Immediately clear transcript to prevent old text from showing during new turn.
+                    if (hasSpeech(inputData) && !isMicMutedRef.current) {
+                        lastUserSpeechTimeRef.current = Date.now();
+                        // Only clear if we haven't recently cleared to avoid flickering
+                        // But for "Only Current Sentence" logic, aggressive clearing is safer.
+                        setTranscript(''); 
+                    }
+
+                    const pcmBlob = createPcmBlob(inputData, inputCtx.sampleRate);
+                    
+                    sessionPromise.then(session => {
+                        // 2. Gate Check again inside Promise
+                        if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
+                        
+                        try {
+                            session.sendRealtimeInput({ media: pcmBlob } as any);
+                        } catch(e) {
+                            // Suppress send errors if connection is dropping
+                        }
+                    });
+                };
+
+                source.connect(inputAnalyser);
+                source.connect(workletNode);
+                workletNode.connect(inputCtx.destination); // Keep graph alive
+                
+                sourceRef.current = source;
+                workletNodeRef.current = workletNode;
+
+            } catch (err) {
+                console.error("[BuaX1] Worklet Setup Failed", err);
+                disconnect("Audio subsystem failed.");
+            }
+          },
+          onmessage: async (msg: LiveServerMessage) => {
+             if (!isConnectedRef.current || connectionIdRef.current !== myConnectionId) return;
+
+             const currentEpoch = interruptionEpochRef.current;
+             lastUserSpeechTimeRef.current = Date.now();
+
+             // Transcript & History Buffering
+             if (msg.serverContent?.outputTranscription?.text) {
+                 const txt = msg.serverContent.outputTranscription.text;
+                 setTranscript(prev => prev + txt);
+                 conversationHistoryRef.current.push({
+                     role: 'model',
+                     text: txt,
+                     timestamp: Date.now()
+                 });
+             }
+             
+             if (msg.serverContent?.inputTranscription?.text) {
+                 const txt = msg.serverContent.inputTranscription.text;
+                 conversationHistoryRef.current.push({
+                     role: 'user',
+                     text: txt,
+                     timestamp: Date.now()
+                 });
+             }
+
+             // Tool Calls
+             if (msg.toolCall) {
+                const calls = msg.toolCall.functionCalls;
+                if (calls?.length) {
+                    const call = calls[0];
+                    if (call.name === 'report_language_change') {
+                        interruptionEpochRef.current += 1;
+                        activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
+                        activeSourcesRef.current.clear();
+                        if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
+
+                        const lang = call.args ? (call.args['language'] as string) : null;
+                        if (lang) setDetectedLanguage(lang);
+
+                        const isSame = lang === detectedLanguageRef.current;
+                        const responseContent = isSame
+                            ? `[SYSTEM: MONITORING. You are correctly speaking ${lang}.]`
+                            : `[SYSTEM: SWITCH to ${lang}. Acknowledge change. FORCE Accent.]`;
+
+                        sessionPromise.then(session => {
+                            if (!isConnectedRef.current) return;
+                            try {
+                                session.sendToolResponse({
+                                    functionResponses: [{
+                                        id: call.id,
+                                        name: call.name,
+                                        response: { result: responseContent }
+                                    }]
+                                });
+                            } catch(e){}
+                        });
+                    }
+                }
+             }
+
+             // Interruption
+             if (msg.serverContent?.interrupted) {
+                interruptionEpochRef.current += 1;
+                activeSourcesRef.current.forEach(s => { try{s.stop()}catch(e){} });
+                activeSourcesRef.current.clear();
+                setTranscript(''); // Clear text on model interrupt
+                if (outputCtx) nextStartTimeRef.current = outputCtx.currentTime;
+                return;
+             }
+             
+             // Audio Output
+             const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+             if (audioData && outputCtx && gainNodeRef.current && outputCtx.state !== 'closed') {
+                 try {
+                    const rawBytes = base64ToUint8Array(audioData);
+                    const audioBuffer = await decodeAudioData(rawBytes, outputCtx, AUDIO_CONFIG.outputSampleRate, 1);
+
+                    if (currentEpoch !== interruptionEpochRef.current) return;
+
+                    const source = outputCtx.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(gainNodeRef.current);
+                    
+                    const startTime = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+                    source.start(startTime);
+                    nextStartTimeRef.current = startTime + audioBuffer.duration;
+                    
+                    activeSourcesRef.current.add(source);
+                    source.onended = () => activeSourcesRef.current.delete(source);
+                 } catch (err) {
+                     // console.error(err);
+                 }
+             }
+          },
+          onclose: () => {
+            console.log('[BuaX1] WebSocket Closed');
+            // Gate Close
+            isConnectedRef.current = false;
+            
+            if (connectionIdRef.current !== myConnectionId) return; // Ignore if already reset
+
+            const duration = Date.now() - connectStartTimeRef.current;
+            const isImmediateFailure = duration < 4000;
+
+            // SCENARIO 1: Immediate Failure (Likely Quota or Key Issue)
+            if (isImmediateFailure) {
+                if (currentKeyIndexRef.current < apiKeys.length - 1) {
+                    console.warn(`[BuaX1] Quota Limit detected. Rotating API Key ${currentKeyIndexRef.current} -> ${currentKeyIndexRef.current + 1}`);
+                    currentKeyIndexRef.current += 1;
+                    retryCountRef.current = 0; // Reset retries for new key
+                    stopAudio();
+                    setTimeout(() => { if (connectRef.current) connectRef.current(); }, 1000);
+                    return;
+                }
+            }
+            
+            // SCENARIO 2: Transient Network Failure (Retry same key)
+            if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
+                 if (retryCountRef.current < MAX_RETRIES) {
+                     const delay = calculateBackoff(retryCountRef.current);
+                     console.warn(`[BuaX1] Connection lost. Retrying in ${delay}ms... (Attempt ${retryCountRef.current + 1}/${MAX_RETRIES})`);
+                     retryCountRef.current += 1;
+                     stopAudio();
+                     
+                     setTimeout(() => { 
+                         if (connectRef.current && !isIntentionalDisconnectRef.current) connectRef.current(); 
+                     }, delay);
+                     return;
+                 }
+            }
+
+            // SCENARIO 3: Fatal Error or Max Retries Reached
+            if (!isIntentionalDisconnectRef.current && statusRef.current !== 'error') {
+                 // Tripswitch: Send transcript on fatal drop
+                 dispatchTranscript();
+
+                 let msg = "Connection interrupted.";
+                 if (isImmediateFailure) {
+                     msg = "Connection rejected. Please check API Quota.";
+                 } else if (retryCountRef.current >= MAX_RETRIES) {
+                     msg = "Unstable connection. Max retries exceeded.";
+                 }
+                 
+                 setError(msg);
+                 setStatus('error');
+            } else if (isIntentionalDisconnectRef.current) {
+                 setStatus('disconnected');
+            }
+            
+            stopAudio();
+          },
+          onerror: (err) => {
+            if (connectionIdRef.current !== myConnectionId) return;
+            isConnectedRef.current = false;
+            
+            console.error("[BuaX1] Session Error", err);
+            
+            // Don't show error UI immediately if we have retries left
+            if (retryCountRef.current < MAX_RETRIES) {
+               // The onclose handler will trigger the retry logic
+               return;
+            }
+
+            dispatchTranscript(); // Tripswitch on error
+
+            setError("Connection failed. Please check your network.");
+            setStatus('error');
+            stopAudio();
+          }
+        }
+      });
+
+      sessionRef.current = sessionPromise;
+
+    } catch (err: any) {
+      if (connectionIdRef.current === myConnectionId) {
+          console.error('[BuaX1] Setup Error:', err);
+          setStatus('error');
+          setError(err.message || "Failed to initialize audio.");
+          stopAudio();
+      }
+    }
+  }, [apiKeys, stopAudio, disconnect, dispatchTranscript]);
+
+  // Keep ref up to date for recursion
+  useEffect(() => {
+      connectRef.current = connect;
+  }, [connect]);
+
+  return {
+    status,
+    connect,
+    disconnect: () => disconnect(), 
+    volume,
+    detectedLanguage,
+    transcript,
+    error,
+    isMuted,
+    toggleMute,
+    isMicMuted,
+    toggleMic,
+    timeLeft,
+    transcriptSent
+  };
+}
