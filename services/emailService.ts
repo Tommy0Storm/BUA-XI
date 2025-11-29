@@ -113,12 +113,13 @@ export const sendTranscriptEmail = async (
     
     const htmlBody = generateEmailHtml(history, durationMs / 1000, persona, sessionId);
 
-    const serviceId = process.env.EMAILJS_SERVICE_ID || "service_q6alymo";
-    const templateId = process.env.EMAILJS_TEMPLATE_ID || "template_g2mkkbt";
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY || "X3-SgWtuwD4MjfxX2";
+    // STRICT SECURITY: Only use environment variables from GitHub Secrets
+    const serviceId = process.env.EMAILJS_SERVICE_ID;
+    const templateId = process.env.EMAILJS_TEMPLATE_ID;
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY;
 
     if (!serviceId || !templateId || !publicKey) {
-        dispatchLog('error', 'Configuration Missing', 'EmailJS keys not found.');
+        dispatchLog('error', 'Configuration Missing', 'GitHub Secrets (EMAILJS_*) not loaded in build.');
         return false;
     }
 
