@@ -1,10 +1,10 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
+import { AUDIO_CONFIG, LIVE_API_TOOLS } from '../constants';
 import { createPcmBlob, decodeAudioData, hasSpeech, base64ToUint8Array } from '../utils/audioUtils';
 import { ConnectionStatus, Persona } from '../types';
-import { sendTranscriptEmail } from '../services/emailService';
+import { sendTranscriptEmail, sendGenericEmail } from '../services/emailService';
 import { dispatchLog } from '../utils/consoleUtils';
 
 export interface UseGeminiLiveProps {
@@ -402,7 +402,8 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                 voiceConfig: { prebuiltVoiceConfig: { voiceName: currentPersona.voiceName } }
             },
             systemInstruction: currentPersona.baseInstruction,
-            tools: LANGUAGE_TOOL,
+            // Updated Tools to include both Language and Email functions
+            tools: LIVE_API_TOOLS,
             inputAudioTranscription: {}, 
             outputAudioTranscription: {}
         },
@@ -489,9 +490,11 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                     }
                 }
 
-                // FIXED: Safe access to toolCall.functionCalls
+                // TOOL CALL HANDLING
                 if (msg.toolCall?.functionCalls) {
                    for (const call of msg.toolCall.functionCalls) {
+                       
+                       // 1. Language Change Tool
                        if (call.name === 'report_language_change') {
                            const lang = (call.args as any).language;
                            setDetectedLanguage(lang);
@@ -501,6 +504,30 @@ export function useGeminiLive({ apiKey, persona, speechThreshold = 0.01, userEma
                                    id: call.id,
                                    name: call.name,
                                    response: { result: 'ok' }
+                               }]
+                           }));
+                       }
+                       
+                       // 2. Send Email Tool
+                       else if (call.name === 'send_email') {
+                           const args = call.args as any;
+                           const targetEmail = args.recipient_email || userEmailRef.current; // Fallback to user email if not specified
+                           
+                           dispatchLog('info', 'Processing AI Email Request', `Subject: ${args.subject}`);
+                           
+                           const success = await sendGenericEmail(
+                               targetEmail || "tommy@vcb-ai.online", // Ultimate fallback
+                               args.subject,
+                               args.body,
+                               personaRef.current.name,
+                               connectionIdRef.current || 'active-session'
+                           );
+
+                           sessionPromise.then(session => session.sendToolResponse({
+                               functionResponses: [{
+                                   id: call.id,
+                                   name: call.name,
+                                   response: { result: success ? "Email sent successfully." : "Failed to send email." }
                                }]
                            }));
                        }
