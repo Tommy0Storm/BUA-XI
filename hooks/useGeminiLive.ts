@@ -1,656 +1,367 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { AUDIO_CONFIG, LANGUAGE_TOOL } from '../constants';
-import { createPcmBlob, decodeAudioData, hasSpeech, base64ToUint8Array } from '../utils/audioUtils';
-import { ConnectionStatus, Persona } from '../types';
-import { sendTranscriptEmail } from '../services/emailService';
+import React, { useEffect, useRef, useMemo } from 'react';
 
-export interface UseGeminiLiveProps {
-  apiKey: string | undefined;
-  persona: Persona;
+interface AudioVisualizerProps {
+  isActive: boolean;
+  inputAnalyser: AnalyserNode | null;
+  outputAnalyser: AnalyserNode | null;
+  color: string;
+  mode?: 'bars' | 'circle';
 }
 
-const VOLUME_GAIN = 1.5;
+// Pooling Constants
+const MAX_PARTICLES = 60;
+const MAX_SHOCKWAVES = 10;
+const HIST_LEN = 64; // Fixed history length for radial graph
 
-// Audio Worklet Code to run in a separate thread
-const WORKLET_CODE = `
-class PCMProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this.bufferSize = 4096;
-    this.buffer = new Float32Array(this.bufferSize);
-    this.index = 0;
-  }
+// Reusable Object Types
+type Particle = { x: number; y: number; vx: number; vy: number; life: number; size: number; active: boolean };
+type Shockwave = { radius: number; opacity: number; width: number; active: boolean };
 
-  process(inputs, outputs, parameters) {
-    const input = inputs[0];
-    if (input.length > 0) {
-      const channelData = input[0];
-      for (let i = 0; i < channelData.length; i++) {
-        this.buffer[this.index++] = channelData[i];
-        if (this.index >= this.bufferSize) {
-          this.port.postMessage(this.buffer);
-          this.index = 0;
-        }
-      }
+// Helper to handle color manipulation
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
+};
+
+const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalyser, outputAnalyser, color, mode = 'circle' }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rgbColor = useRef(hexToRgb(color));
+  
+  // Reusable data buffers for the analysers
+  const inputDataRef = useRef<Uint8Array | null>(null);
+  const outputDataRef = useRef<Uint8Array | null>(null);
+
+  // Pre-calculate Trigonometry Tables to avoid Math.cos/sin in the hot loop
+  // Angles are relative to the ring's local rotation (0 to 2PI)
+  const trigTable = useMemo(() => {
+    const cosTable = new Float32Array(HIST_LEN);
+    const sinTable = new Float32Array(HIST_LEN);
+    const angleStep = (Math.PI * 2) / HIST_LEN;
+    for(let i=0; i<HIST_LEN; i++) {
+        // Offset by -Math.PI/2 so index 0 starts at top
+        const angle = i * angleStep - Math.PI / 2;
+        cosTable[i] = Math.cos(angle);
+        sinTable[i] = Math.sin(angle);
     }
-    return true;
-  }
-}
-registerProcessor('pcm-processor', PCMProcessor);
-`;
-
-interface TranscriptEntry {
-    role: 'user' | 'model' | 'system';
-    text: string;
-    timestamp: number;
-}
-
-export function useGeminiLive({ apiKey, persona }: UseGeminiLiveProps) {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [detectedLanguage, setDetectedLanguage] = useState<string>('Auto-Detect');
-  const [transcript, setTranscript] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isMicMuted, setIsMicMuted] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(120);
-  const [transcriptSent, setTranscriptSent] = useState(false);
-
-  // API Key Management
-  const apiKeys = useMemo(() => 
-    apiKey ? apiKey.split(',').map(k => k.trim()).filter(k => k.length > 0) : [], 
-  [apiKey]);
-  const currentKeyIndexRef = useRef(0);
-  const retryCountRef = useRef(0);
-
-  // Refs for audio management
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const inputContextRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
-  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
-  
-  // Public Analyser Refs (Exposed to Visualizer)
-  const inputAnalyserRef = useRef<AnalyserNode | null>(null);
-  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
-  
-  const nextStartTimeRef = useRef<number>(0);
-  const sessionRef = useRef<Promise<any> | null>(null);
-  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  
-  const interruptionEpochRef = useRef<number>(0);
-  const demoTimerRef = useRef<number | null>(null);
-  const personaRef = useRef<Persona>(persona);
-  const isMutedRef = useRef(isMuted);
-  const isMicMutedRef = useRef(isMicMuted);
-  
-  const lastUserSpeechTimeRef = useRef<number>(Date.now());
-  const silenceCheckIntervalRef = useRef<number | null>(null);
-  
-  // --- STATE CONTROL REFS ---
-  const connectionIdRef = useRef<string | null>(null);
-  const isIntentionalDisconnectRef = useRef<boolean>(false);
-  const statusRef = useRef<ConnectionStatus>('disconnected');
-  const connectStartTimeRef = useRef<number>(0);
-  const conversationHistoryRef = useRef<TranscriptEntry[]>([]);
-  
-  // Transcription accumulators
-  const currentInputTranscriptionRef = useRef<string>('');
-  const currentOutputTranscriptionRef = useRef<string>('');
-  
-  // Synchronous Gate: strictly tracks if we believe the socket is open
-  const isConnectedRef = useRef<boolean>(false);
-  
-  // Retry Logic for recursive connection
-  const connectRef = useRef<((isRetry?: boolean) => Promise<void>) | null>(null);
-
-  useEffect(() => {
-    personaRef.current = persona;
-  }, [persona]);
-
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  useEffect(() => {
-    isMutedRef.current = isMuted;
-    if (gainNodeRef.current && gainNodeRef.current.context) {
-        const ctx = gainNodeRef.current.context;
-        const currentTime = ctx.currentTime;
-        gainNodeRef.current.gain.setTargetAtTime(isMuted ? 0 : VOLUME_GAIN, currentTime, 0.05);
-    }
-  }, [isMuted]);
-
-  useEffect(() => {
-    isMicMutedRef.current = isMicMuted;
-  }, [isMicMuted]);
-
-  const toggleMute = useCallback(() => {
-    setIsMuted(prev => !prev);
+    return { cos: cosTable, sin: sinTable };
   }, []);
 
-  const toggleMic = useCallback(() => {
-    setIsMicMuted(prev => !prev);
-  }, []);
+  // OBJECT POOLS
+  const poolsRef = useRef({
+      particles: Array.from({ length: MAX_PARTICLES }, (): Particle => ({ 
+          x: 0, y: 0, vx: 0, vy: 0, life: 0, size: 0, active: false 
+      })),
+      shockwaves: Array.from({ length: MAX_SHOCKWAVES }, (): Shockwave => ({ 
+          radius: 0, opacity: 0, width: 0, active: false 
+      }))
+  });
 
-  // --- TRIPSWITCH: EMAIL DISPATCH LOGIC ---
-  const dispatchTranscript = useCallback(async () => {
-    const duration = Date.now() - connectStartTimeRef.current;
+  // State for complex animation physics
+  const stateRef = useRef({
+    phase: 0,
+    rotation: 0,
+    smoothedVolume: 0,
+    history: new Array(HIST_LEN).fill(0), 
+    lastVolume: 0
+  });
+
+  useEffect(() => {
+    rgbColor.current = hexToRgb(color);
+  }, [color]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+
+    let animationFrameId: number;
     
-    // Condition: Session must be longer than 20 seconds
-    if (duration > 20000 && conversationHistoryRef.current.length > 0) {
-        console.log(`[BuaX1] ⚡ TRIPSWITCH: Session Duration ${Math.round(duration/1000)}s > 20s. Sending to Email Service...`);
-        
-        // Pass the ref data to the service
-        const success = await sendTranscriptEmail(
-            conversationHistoryRef.current,
-            duration,
-            personaRef.current,
-            connectionIdRef.current || 'unknown-session'
-        );
-
-        if (success) {
-            setTranscriptSent(true);
-            setTimeout(() => setTranscriptSent(false), 5000);
-        }
-    } else {
-        console.log(`[BuaX1] Session ended. Duration ${Math.round(duration/1000)}s < 20s. No transcript sent.`);
+    // High-DPI Canvas Setup
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    
+    if (inputAnalyser && !inputDataRef.current) {
+        inputDataRef.current = new Uint8Array(inputAnalyser.frequencyBinCount);
     }
-  }, []);
-
-  const stopAudio = useCallback(() => {
-    console.log('[BuaX1] Stopping Audio Subsystems...');
-    
-    // CRITICAL: Immediate synchronous gate close
-    isConnectedRef.current = false;
-    connectionIdRef.current = null;
-    
-    // Kill the worklet
-    if (workletNodeRef.current) {
-        // Remove event listener to prevent processing errors during shutdown
-        workletNodeRef.current.port.onmessage = null;
-        workletNodeRef.current.onprocessorerror = null;
-        try { 
-            workletNodeRef.current.disconnect(); 
-        } catch(e) {
-            console.warn("[BuaX1] Failed to disconnect worklet node:", e);
-        }
-        workletNodeRef.current = null;
+    if (outputAnalyser && !outputDataRef.current) {
+        outputDataRef.current = new Uint8Array(outputAnalyser.frequencyBinCount);
     }
 
-    if (demoTimerRef.current) {
-        window.clearInterval(demoTimerRef.current);
-        demoTimerRef.current = null;
-    }
-
-    if (silenceCheckIntervalRef.current) {
-        window.clearInterval(silenceCheckIntervalRef.current);
-        silenceCheckIntervalRef.current = null;
-    }
-
-    if (inputContextRef.current) {
-      try { 
-          // Ensure we close the context, but handle if it's already closed
-          if(inputContextRef.current.state !== 'closed') {
-              inputContextRef.current.close(); 
-          }
-      } catch(e) {
-           console.warn("[BuaX1] Error closing input context:", e);
-      }
-      inputContextRef.current = null;
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    if (sourceRef.current) {
-      try { sourceRef.current.disconnect(); } catch(e) {}
-      sourceRef.current = null;
-    }
-    
-    // Disconnect Nodes
-    [gainNodeRef, inputAnalyserRef, outputAnalyserRef].forEach(ref => {
-        if (ref.current) {
-            try { ref.current.disconnect(); } catch(e) {}
-        }
-    });
-
-    activeSourcesRef.current.forEach(source => {
-      try { source.stop(); source.disconnect(); } catch (e) {}
-    });
-    activeSourcesRef.current.clear();
-    
-    if (audioContextRef.current) {
-        try { 
-            if (audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close(); 
-            }
-        } catch(e) {}
-        audioContextRef.current = null;
-    }
-    
-    console.log('[BuaX1] Audio Stopped.');
-  }, []);
-
-  const disconnect = useCallback(async (errorMessage?: string) => {
-    console.log('[BuaX1] Disconnecting session (Intentional)...');
-    
-    // Trigger Tripswitch
-    dispatchTranscript();
-
-    isIntentionalDisconnectRef.current = true;
-    isConnectedRef.current = false; // Immediate gate
-
-    if (sessionRef.current) {
-        try {
-            const session = await sessionRef.current;
-            session.close();
-        } catch (e) {
-            console.warn('[BuaX1] Error closing session:', e);
-        }
-    }
-    sessionRef.current = null;
-    
-    // State sanitation
-    setStatus('disconnected');
-    setDetectedLanguage('Auto-Detect');
-    setTranscript('');
-    retryCountRef.current = 0;
-    
-    if (errorMessage) {
-        setError(errorMessage);
-        setStatus('error');
-    }
-    
-    stopAudio();
-  }, [stopAudio, dispatchTranscript]);
-
-  const connect = useCallback(async (isRetry = false) => {
-    if (apiKeys.length === 0) {
-      setError('API Key is missing.');
-      setStatus('error');
-      return;
-    }
-    
-    // Ensure clean slate
-    stopAudio();
-    isConnectedRef.current = false;
-    setTranscriptSent(false); // Reset sent flag
-
-    const currentKey = apiKeys[currentKeyIndexRef.current];
-    console.log(`[BuaX1] Connecting with key index: ${currentKeyIndexRef.current} (Attempt ${retryCountRef.current + 1})`);
-
-    // Generate a unique ID for this connection attempt
-    const myConnectionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    connectionIdRef.current = myConnectionId;
-
-    try {
-      setStatus('connecting');
-      setError(null);
-      
-      // Clean previous session data
-      setDetectedLanguage('Auto-Detect');
-      setTranscript('');
-      conversationHistoryRef.current = []; // Reset history for new session
-      currentInputTranscriptionRef.current = '';
-      currentOutputTranscriptionRef.current = '';
-      
-      const currentPersona = personaRef.current;
-      setTimeLeft(currentPersona.maxDurationSeconds || 120);
-      
-      // Reset State Flags
-      interruptionEpochRef.current = 0;
-      isIntentionalDisconnectRef.current = false;
-      connectStartTimeRef.current = Date.now();
-
-      // --- AUDIO SETUP ---
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const inputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.inputSampleRate }); 
-      const outputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.outputSampleRate });
-      
-      // Enterprise Stability: Robust context resumption
-      await Promise.all([
-          outputCtx.resume().catch(e => console.warn("Output Resume failed", e)), 
-          inputCtx.resume().catch(e => console.warn("Input Resume failed", e))
-      ]);
-      
-      // If user cancelled while we were waiting for contexts
-      if (connectionIdRef.current !== myConnectionId) return;
-
-      audioContextRef.current = outputCtx;
-      inputContextRef.current = inputCtx;
-      nextStartTimeRef.current = outputCtx.currentTime;
-
-      // 1. Output Pipeline (Speaker)
-      const compressor = outputCtx.createDynamicsCompressor();
-      compressor.threshold.value = -20;
-      compressor.knee.value = 30;
-      compressor.ratio.value = 3;
-      compressor.attack.value = 0.003; 
-      compressor.release.value = 0.25;
-
-      const outputAnalyser = outputCtx.createAnalyser();
-      outputAnalyser.fftSize = 256;
-      outputAnalyser.smoothingTimeConstant = 0.3;
-      outputAnalyserRef.current = outputAnalyser;
-      
-      const gainNode = outputCtx.createGain();
-      gainNode.gain.value = isMutedRef.current ? 0 : VOLUME_GAIN;
-      gainNodeRef.current = gainNode;
-      
-      gainNode.connect(compressor);
-      compressor.connect(outputAnalyser);
-      outputAnalyser.connect(outputCtx.destination);
-
-      // 2. Input Pipeline (Microphone) with Noise Gate Logic
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
-            sampleRate: AUDIO_CONFIG.inputSampleRate,
-            channelCount: 1,
-            echoCancellation: true,
-            autoGainControl: true,
-            noiseSuppression: true
-        } 
-      });
-      streamRef.current = stream;
-
-      const source = inputCtx.createMediaStreamSource(stream);
-      sourceRef.current = source;
-      
-      const inputAnalyser = inputCtx.createAnalyser();
-      inputAnalyser.fftSize = 256;
-      inputAnalyser.smoothingTimeConstant = 0.5;
-      inputAnalyserRef.current = inputAnalyser;
-      
-      // Noise Gate Implementation:
-      // We use a DynamicsCompressor with aggressive threshold to gate background noise
-      const noiseGate = inputCtx.createDynamicsCompressor();
-      noiseGate.threshold.value = -50; // Gate open threshold
-      noiseGate.knee.value = 40;
-      noiseGate.ratio.value = 12; // High ratio for aggressive gating
-      noiseGate.attack.value = 0;
-      noiseGate.release.value = 0.25;
-
-      source.connect(noiseGate);
-      noiseGate.connect(inputAnalyser);
-
-      // 3. Audio Worklet - Robust Loading
-      // Note: We use a Blob to load the worklet code to avoid external file dependencies.
-      const blob = new Blob([WORKLET_CODE], { type: "application/javascript; charset=utf-8" });
-      const workletUrl = URL.createObjectURL(blob);
-      let workletNode: AudioWorkletNode;
-
-      try {
-        await inputCtx.audioWorklet.addModule(workletUrl);
-        workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
-      } catch (err: any) {
-        console.error("[BuaX1] AudioWorklet init failed:", err);
-        throw new Error(`Failed to initialize Audio Worklet: ${err.message}`);
-      } finally {
-        // Critical: Revoke URL to release memory, but only after loading attempt
-        URL.revokeObjectURL(workletUrl); 
-      }
-      
-      workletNodeRef.current = workletNode;
-      
-      workletNode.onprocessorerror = (err) => {
-        console.error('[BuaX1] Worklet Processor Error:', err);
-        // If the processor crashes, we can attempt to disconnect gracefully
-        if (isConnectedRef.current) {
-            disconnect('Audio processor crashed. Please reconnect.');
-        }
-      };
-      
-      inputAnalyser.connect(workletNode);
-      // Connect to gain 0 to keep graph alive but mute local feedback
-      const nullGain = inputCtx.createGain();
-      nullGain.gain.value = 0;
-      workletNode.connect(nullGain);
-      nullGain.connect(inputCtx.destination);
-
-
-      // --- GEMINI API CONNECTION ---
-      const ai = new GoogleGenAI({ apiKey: currentKey });
-      
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-        config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-                voiceConfig: { prebuiltVoiceConfig: { voiceName: currentPersona.voiceName } }
-            },
-            systemInstruction: currentPersona.baseInstruction,
-            tools: LANGUAGE_TOOL,
-            inputAudioTranscription: {}, // Correct empty object for enablement
-            outputAudioTranscription: {}  // Correct empty object for enablement
-        },
-        callbacks: {
-            onopen: () => {
-                if (connectionIdRef.current !== myConnectionId) return;
-                console.log('[BuaX1] Session Connected.');
-                setStatus('connected');
-                isConnectedRef.current = true;
-                retryCountRef.current = 0; // Reset retry count on successful connection
-                
-                demoTimerRef.current = window.setInterval(() => {
-                    setTimeLeft((prev) => {
-                        if (prev <= 1) {
-                            disconnect("Demo time limit reached.");
-                            return 0;
-                        }
-                        return prev - 1;
-                    });
-                }, 1000);
-            },
-            onmessage: async (msg: LiveServerMessage) => {
-                if (connectionIdRef.current !== myConnectionId) return;
-
-                // Handle Audio
-                const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-                if (audioData) {
-                    try {
-                        const audioBuffer = await decodeAudioData(
-                            base64ToUint8Array(audioData) as any, // Cast to any to fix Uint8Array<ArrayBuffer> mismatch
-                            outputCtx,
-                            AUDIO_CONFIG.outputSampleRate,
-                            1
-                        );
-                        
-                        nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-                        
-                        const source = outputCtx.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(gainNode);
-                        
-                        source.onended = () => {
-                            activeSourcesRef.current.delete(source);
-                        };
-                        
-                        source.start(nextStartTimeRef.current);
-                        nextStartTimeRef.current += audioBuffer.duration;
-                        activeSourcesRef.current.add(source);
-                    } catch (e) {
-                        console.error("Audio decoding error", e);
-                    }
-                }
-
-                // Handle Transcription
-                const serverContent = msg.serverContent;
-                if (serverContent) {
-                    if (serverContent.outputTranscription?.text) {
-                        currentOutputTranscriptionRef.current += serverContent.outputTranscription.text;
-                    }
-                    if (serverContent.inputTranscription?.text) {
-                        currentInputTranscriptionRef.current += serverContent.inputTranscription.text;
-                    }
-
-                    if (serverContent.turnComplete) {
-                        const userText = currentInputTranscriptionRef.current.trim();
-                        const modelText = currentOutputTranscriptionRef.current.trim();
-                        
-                        if (userText) {
-                            conversationHistoryRef.current.push({
-                                role: 'user',
-                                text: userText,
-                                timestamp: Date.now()
-                            });
-                        }
-                        if (modelText) {
-                            conversationHistoryRef.current.push({
-                                role: 'model',
-                                text: modelText,
-                                timestamp: Date.now()
-                            });
-                            setTranscript(modelText);
-                        }
-                        
-                        currentInputTranscriptionRef.current = '';
-                        currentOutputTranscriptionRef.current = '';
-                    }
-                }
-
-                // Handle Tool Calls (Language Detection)
-                // Fix TS18048: Check if functionCalls exists before iterating
-                if (msg.toolCall?.functionCalls) {
-                   for (const call of msg.toolCall.functionCalls) {
-                       if (call.name === 'report_language_change') {
-                           const lang = (call.args as any).language;
-                           setDetectedLanguage(lang);
-                           // Send response back
-                           sessionPromise.then(session => session.sendToolResponse({
-                               functionResponses: [{
-                                   id: call.id,
-                                   name: call.name,
-                                   response: { result: 'ok' }
-                               }]
-                           }));
-                       }
-                   }
-                }
-
-                // Handle Interruption
-                if (serverContent?.interrupted) {
-                    console.log('[BuaX1] Interruption detected');
-                    activeSourcesRef.current.forEach(src => {
-                        try { src.stop(); } catch(e){}
-                    });
-                    activeSourcesRef.current.clear();
-                    nextStartTimeRef.current = outputCtx.currentTime;
-                    currentOutputTranscriptionRef.current = ''; 
-                }
-            },
-            onclose: (e) => {
-                 // Immediate Disconnect Handling (Quota/Key issues)
-                 const duration = Date.now() - connectStartTimeRef.current;
-                 
-                 // If connection died instantly (< 4s), it's likely a bad key or quota limit
-                 if (duration < 4000 && apiKeys.length > 1 && !isIntentionalDisconnectRef.current) {
-                     console.warn(`[BuaX1] Immediate disconnect detected (Quota?). Rotating API Key from index ${currentKeyIndexRef.current} to ${currentKeyIndexRef.current + 1}`);
-                     
-                     // Rotate Key
-                     currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
-                     retryCountRef.current = 0; // Reset retry for new key
-                     
-                     // Safe Recursive Retry
-                     setTimeout(() => {
-                         if (connectRef.current) connectRef.current(true);
-                     }, 1000); 
-                     return;
-                 }
-
-                if (!isIntentionalDisconnectRef.current) {
-                    console.warn('[BuaX1] Session closed unexpectedly:', e);
-                    
-                    // Exponential Backoff Logic: 1s, 2s, 4s, 8s... capped at 10s
-                    // Base 1000ms * 2^retryCount. 
-                    const backoffDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
-                    retryCountRef.current += 1;
-                    
-                    console.log(`[BuaX1] Auto-reconnecting in ${backoffDelay}ms (Attempt ${retryCountRef.current})...`);
-                    stopAudio(); 
-                    
-                    // Don't set status to 'error' to avoid flashing UI, keep user in the flow
-                    // setStatus('connecting'); // Optional
-                    
-                    setTimeout(() => {
-                        if (connectRef.current) connectRef.current(true);
-                    }, backoffDelay);
-                } else {
-                    // Normal disconnect already handled
-                }
-            },
-            onerror: (err) => {
-                 console.error('[BuaX1] Session Error:', err);
-                 isConnectedRef.current = false;
+    const spawnParticle = (cx: number, cy: number, v: number) => {
+        const pool = poolsRef.current.particles;
+        for (let i = 0; i < MAX_PARTICLES; i++) {
+            if (!pool[i].active) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = v * 20; 
+                pool[i].active = true;
+                pool[i].x = cx + Math.cos(angle) * r;
+                pool[i].y = cy + Math.sin(angle) * r;
+                pool[i].vx = Math.cos(angle) * (1 + Math.random());
+                pool[i].vy = Math.sin(angle) * (1 + Math.random());
+                pool[i].life = 1.0;
+                pool[i].size = Math.random() * 2;
+                break;
             }
         }
-      });
-      
-      sessionRef.current = sessionPromise;
-
-      workletNode.port.onmessage = (event) => {
-          if (isConnectedRef.current && !isMicMutedRef.current) {
-               const inputBuffer = event.data;
-               
-               if (hasSpeech(inputBuffer)) {
-                   lastUserSpeechTimeRef.current = Date.now();
-               }
-
-               const pcmBlob = createPcmBlob(inputBuffer, AUDIO_CONFIG.inputSampleRate);
-               
-               // Use sessionPromise directly to ensure we use the active socket
-               sessionPromise.then(session => {
-                   // Double check gate before sending
-                   if(isConnectedRef.current) {
-                        try {
-                           session.sendRealtimeInput({ media: pcmBlob });
-                        } catch(e) {
-                            // Suppress "WebSocket is already in CLOSING" errors
-                        }
-                   }
-               }).catch(e => {
-                   // ignore send errors
-               });
-          }
-      };
-
-    } catch (err: any) {
-        console.error("Connection failed", err);
-        setStatus('error');
-        setError(err.message || "Failed to connect");
-        stopAudio();
-    }
-  }, [apiKeys, persona, stopAudio, disconnect]);
-
-  // Assign ref for recursive calls
-  useEffect(() => {
-      connectRef.current = connect;
-  }, [connect]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-        stopAudio();
     };
-  }, [stopAudio]);
 
-  return {
-    status,
-    connect,
-    disconnect,
-    inputAnalyserRef,
-    outputAnalyserRef,
-    detectedLanguage,
-    transcript,
-    error,
-    isMuted,
-    toggleMute,
-    isMicMuted,
-    toggleMic,
-    timeLeft,
-    transcriptSent
-  };
-}
+    const spawnShockwave = (baseRadius: number, v: number) => {
+        const pool = poolsRef.current.shockwaves;
+        for (let i = 0; i < MAX_SHOCKWAVES; i++) {
+            if (!pool[i].active) {
+                pool[i].active = true;
+                pool[i].radius = baseRadius * 0.3;
+                pool[i].opacity = 1;
+                pool[i].width = 2 + v * 10;
+                break;
+            }
+        }
+    };
+    
+    const render = () => {
+      const state = stateRef.current;
+      const pools = poolsRef.current;
+      const rgb = rgbColor.current;
+      const width = rect.width;
+      const height = rect.height;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const maxRadius = Math.min(width, height) / 2;
+
+      // --- VOLUME CALCULATION ---
+      let maxVol = 0;
+      
+      if (isActive) {
+          if (inputAnalyser && inputDataRef.current) {
+             inputAnalyser.getByteTimeDomainData(inputDataRef.current as any);
+             const data = inputDataRef.current;
+             let sum = 0;
+             // Opt: Sample every 8th point
+             for (let i = 0; i < data.length; i += 8) {
+                 const v = (data[i] - 128) / 128;
+                 sum += v * v;
+             }
+             // Correct for sparse sampling in average
+             const rms = Math.sqrt(sum / (data.length / 8));
+             if (rms > maxVol) maxVol = rms;
+          }
+
+          if (outputAnalyser && outputDataRef.current) {
+             outputAnalyser.getByteTimeDomainData(outputDataRef.current as any);
+             const data = outputDataRef.current;
+             let sum = 0;
+             for (let i = 0; i < data.length; i += 8) {
+                 const v = (data[i] - 128) / 128;
+                 sum += v * v;
+             }
+             const rms = Math.sqrt(sum / (data.length / 8));
+             if (rms > maxVol) maxVol = rms;
+          }
+      }
+
+      if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
+      // Increased sensitivity by 30% (2.5 -> 3.25)
+      maxVol = maxVol * 3.25; 
+
+      const targetVolume = isActive ? Math.max(0.01, maxVol) : 0.01;
+      const lerpFactor = targetVolume > state.smoothedVolume ? 0.3 : 0.05; 
+      state.smoothedVolume += (targetVolume - state.smoothedVolume) * lerpFactor;
+      
+      const v = state.smoothedVolume;
+      const vBoost = v * 2.0; 
+      
+      state.history.push(v);
+      state.history.shift();
+
+      if (v > 0.35 && v - state.lastVolume > 0.1) {
+          spawnShockwave(maxRadius, v);
+      }
+      state.lastVolume = v;
+
+      state.phase += 0.05 + (v * 0.1); 
+      state.rotation += 0.005;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.globalCompositeOperation = 'lighter'; 
+
+      if (mode === 'circle') {
+          
+          // 1. RENDER SHOCKWAVES
+          for (let i = 0; i < MAX_SHOCKWAVES; i++) {
+              const wave = pools.shockwaves[i];
+              if (!wave.active) continue;
+
+              wave.radius += 2 + (v * 5);
+              wave.opacity -= 0.02;
+              
+              if (wave.opacity <= 0 || wave.radius > maxRadius) {
+                  wave.active = false; 
+                  continue;
+              }
+
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, wave.radius, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(${rgb}, ${wave.opacity * 0.5})`;
+              ctx.lineWidth = wave.width;
+              ctx.stroke();
+          }
+
+          // 2. RADIAL AUDIO GRAPH (Optimized with Context Rotation)
+          const graphRadius = maxRadius * 0.75;
+          
+          // Save context, translate to center, rotate ONLY the context
+          // This avoids calculating sin/cos for every point relative to rotation
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(state.rotation);
+          
+          ctx.beginPath();
+          // Skip every 2nd point for performance
+          for(let i = 0; i < HIST_LEN; i += 2) {
+              const val = state.history[i];
+              if (val < 0.01) continue;
+              
+              const h = val * 40;
+              // Use pre-calculated trig values from Float32Array
+              const cos = trigTable.cos[i];
+              const sin = trigTable.sin[i];
+              
+              // Draw relative to center (0,0)
+              const x1 = cos * graphRadius;
+              const y1 = sin * graphRadius;
+              const x2 = cos * (graphRadius + h + 2);
+              const y2 = sin * (graphRadius + h + 2);
+              
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(x2, y2);
+          }
+          
+          ctx.strokeStyle = `rgba(${rgb}, 0.3)`;
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore(); // Restore context to standard grid
+
+          // 3. TECHNICAL RINGS
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, maxRadius * 0.9, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${rgb}, 0.1)`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.stroke();
+          
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(-state.rotation * 0.5);
+          ctx.beginPath();
+          ctx.arc(0, 0, maxRadius * 0.85, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${rgb}, 0.2)`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([40, 20, 10, 80]); 
+          ctx.stroke();
+          ctx.restore();
+
+          // 4. THE CORE
+          const coreBaseRadius = maxRadius * 0.35;
+          ctx.save();
+          ctx.shadowBlur = 30 * vBoost;
+          ctx.shadowColor = `rgba(${rgb}, 0.8)`;
+          
+          ctx.beginPath();
+          // Reduced resolution circle for core (40 steps is enough for visual smoothing)
+          for (let i = 0; i <= 40; i++) {
+              const angle = (i / 40) * Math.PI * 2;
+              const r = coreBaseRadius + 
+                        Math.sin(angle * 5 + state.phase) * (10 * vBoost) + 
+                        Math.cos(angle * 3 - state.phase) * (5 * vBoost);
+              
+              const x = centerX + Math.cos(angle) * r;
+              const y = centerY + Math.sin(angle) * r;
+              
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          
+          const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreBaseRadius * 1.5);
+          gradient.addColorStop(0, '#ffffff');
+          gradient.addColorStop(0.4, `rgba(${rgb}, 0.8)`);
+          gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+          
+          ctx.fillStyle = gradient;
+          ctx.fill();
+          ctx.restore();
+
+          // 5. WIREFRAME MESH
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, coreBaseRadius * 0.5, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 2]);
+          ctx.stroke();
+
+          // 6. PARTICLES
+          if (v > 0.1) spawnParticle(centerX, centerY, v);
+
+          for (let i = 0; i < MAX_PARTICLES; i++) {
+              const p = pools.particles[i];
+              if (!p.active) continue;
+
+              p.x += p.vx * (1 + v);
+              p.y += p.vy * (1 + v);
+              p.life -= 0.03;
+
+              if (p.life <= 0) {
+                  p.active = false;
+                  continue;
+              }
+
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(${rgb}, ${p.life})`;
+              ctx.fill();
+          }
+
+      } else {
+        // PREVIEW MODE (BARS)
+        const bars = 20;
+        const barWidth = width / bars;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, height/2);
+        ctx.lineTo(width, height/2);
+        ctx.strokeStyle = `rgba(${rgb}, 0.2)`;
+        ctx.stroke();
+
+        for (let i = 0; i < bars; i++) {
+            const noise = Math.abs(Math.sin(i * 0.5 + state.phase * 2));
+            const h = height * 0.8 * v * noise;
+            const x = i * barWidth;
+            const y = (height - h) / 2;
+            
+            ctx.fillStyle = `rgba(${rgb}, 0.8)`;
+            ctx.fillRect(x + 1, y, barWidth - 2, h);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isActive, inputAnalyser, outputAnalyser, color, mode, trigTable]);
+
+  return (
+    <canvas 
+        ref={canvasRef} 
+        className={`block ${mode === 'circle' ? "w-full h-full" : "w-24 h-12"}`}
+    />
+  );
+};
+
+export default AudioVisualizer;
