@@ -20,31 +20,31 @@ type Shockwave = { radius: number; opacity: number; width: number; active: boole
 // Helper to handle color manipulation
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '255, 255, 255';
+  return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 255, g: 255, b: 255 };
 };
 
 const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalyser, outputAnalyser, color, mode = 'circle' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rgbColor = useRef(hexToRgb(color));
+  const personaRgb = useRef(hexToRgb(color));
+  const userRgb = useRef({ r: 0, g: 255, b: 255 }); // User is Cyan/White
+  const currentRgb = useRef(hexToRgb(color));
   
   // Reusable data buffers for the analysers
   const inputDataRef = useRef<Uint8Array | null>(null);
   const outputDataRef = useRef<Uint8Array | null>(null);
 
   // Pre-calculate Trigonometry Tables to avoid Math.cos/sin in the hot loop
-  // Angles are relative to the ring's local rotation (0 to 2PI)
   const trigTable = useMemo(() => {
-    const table = [];
+    const cosTable = new Float32Array(HIST_LEN);
+    const sinTable = new Float32Array(HIST_LEN);
     const angleStep = (Math.PI * 2) / HIST_LEN;
     for(let i=0; i<HIST_LEN; i++) {
         // Offset by -Math.PI/2 so index 0 starts at top
         const angle = i * angleStep - Math.PI / 2;
-        table.push({
-            cos: Math.cos(angle),
-            sin: Math.sin(angle)
-        });
+        cosTable[i] = Math.cos(angle);
+        sinTable[i] = Math.sin(angle);
     }
-    return table;
+    return { cos: cosTable, sin: sinTable };
   }, []);
 
   // OBJECT POOLS
@@ -63,11 +63,12 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     rotation: 0,
     smoothedVolume: 0,
     history: new Array(HIST_LEN).fill(0), 
-    lastVolume: 0
+    lastVolume: 0,
+    sourceMix: 0 // 0 = Persona, 1 = User
   });
 
   useEffect(() => {
-    rgbColor.current = hexToRgb(color);
+    personaRgb.current = hexToRgb(color);
   }, [color]);
 
   useEffect(() => {
@@ -126,7 +127,6 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     const render = () => {
       const state = stateRef.current;
       const pools = poolsRef.current;
-      const rgb = rgbColor.current;
       const width = rect.width;
       const height = rect.height;
       const centerX = width / 2;
@@ -134,21 +134,19 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
       const maxRadius = Math.min(width, height) / 2;
 
       // --- VOLUME CALCULATION ---
-      let maxVol = 0;
+      let inputVol = 0;
+      let outputVol = 0;
       
       if (isActive) {
           if (inputAnalyser && inputDataRef.current) {
              inputAnalyser.getByteTimeDomainData(inputDataRef.current as any);
              const data = inputDataRef.current;
              let sum = 0;
-             // Opt: Sample every 8th point
              for (let i = 0; i < data.length; i += 8) {
                  const v = (data[i] - 128) / 128;
                  sum += v * v;
              }
-             // Correct for sparse sampling in average
-             const rms = Math.sqrt(sum / (data.length / 8));
-             if (rms > maxVol) maxVol = rms;
+             inputVol = Math.sqrt(sum / (data.length / 8));
           }
 
           if (outputAnalyser && outputDataRef.current) {
@@ -159,16 +157,33 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
                  const v = (data[i] - 128) / 128;
                  sum += v * v;
              }
-             const rms = Math.sqrt(sum / (data.length / 8));
-             if (rms > maxVol) maxVol = rms;
+             outputVol = Math.sqrt(sum / (data.length / 8));
           }
       }
 
+      // Determine Source Color Mix
+      // If User is louder, mix towards 1. If AI is louder, mix towards 0.
+      const targetMix = inputVol > outputVol ? 1.0 : 0.0;
+      state.sourceMix += (targetMix - state.sourceMix) * 0.1; // Smooth transition
+
+      // Interpolate Color
+      currentRgb.current = {
+          r: Math.round(personaRgb.current.r + (userRgb.current.r - personaRgb.current.r) * state.sourceMix),
+          g: Math.round(personaRgb.current.g + (userRgb.current.g - personaRgb.current.g) * state.sourceMix),
+          b: Math.round(personaRgb.current.b + (userRgb.current.b - personaRgb.current.b) * state.sourceMix)
+      };
+      const rgb = `${currentRgb.current.r}, ${currentRgb.current.g}, ${currentRgb.current.b}`;
+
+      let maxVol = Math.max(inputVol, outputVol);
       if (isNaN(maxVol) || !isFinite(maxVol)) maxVol = 0;
-      maxVol = maxVol * 2.5; 
+      
+      // SENSITIVITY TUNING
+      // Boost signal for visualization
+      maxVol = maxVol * 3.5; 
 
       const targetVolume = isActive ? Math.max(0.01, maxVol) : 0.01;
-      const lerpFactor = targetVolume > state.smoothedVolume ? 0.3 : 0.05; 
+      // Tuned Lerp: Fast attack (0.2), smoother release (0.08) to reduce jitter
+      const lerpFactor = targetVolume > state.smoothedVolume ? 0.2 : 0.08; 
       state.smoothedVolume += (targetVolume - state.smoothedVolume) * lerpFactor;
       
       const v = state.smoothedVolume;
@@ -213,8 +228,6 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           // 2. RADIAL AUDIO GRAPH (Optimized with Context Rotation)
           const graphRadius = maxRadius * 0.75;
           
-          // Save context, translate to center, rotate ONLY the context
-          // This avoids calculating sin/cos for every point relative to rotation
           ctx.save();
           ctx.translate(centerX, centerY);
           ctx.rotate(state.rotation);
@@ -226,10 +239,9 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
               if (val < 0.01) continue;
               
               const h = val * 40;
-              // Use pre-calculated trig values
-              const { cos, sin } = trigTable[i];
+              const cos = trigTable.cos[i];
+              const sin = trigTable.sin[i];
               
-              // Draw relative to center (0,0)
               const x1 = cos * graphRadius;
               const y1 = sin * graphRadius;
               const x2 = cos * (graphRadius + h + 2);
@@ -243,7 +255,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.lineWidth = 2;
           ctx.lineCap = 'round';
           ctx.stroke();
-          ctx.restore(); // Restore context to standard grid
+          ctx.restore();
 
           // 3. TECHNICAL RINGS
           ctx.beginPath();
@@ -271,7 +283,6 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
           ctx.shadowColor = `rgba(${rgb}, 0.8)`;
           
           ctx.beginPath();
-          // Reduced resolution circle for core (40 steps is enough for visual smoothing)
           for (let i = 0; i <= 40; i++) {
               const angle = (i / 40) * Math.PI * 2;
               const r = coreBaseRadius + 
@@ -353,14 +364,4 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ isActive, inputAnalys
     render();
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isActive, inputAnalyser, outputAnalyser, color, mode, trigTable]);
-
-  return (
-    <canvas 
-        ref={canvasRef} 
-        className={`block ${mode === 'circle' ? "w-full h-full" : "w-24 h-12"}`}
-    />
-  );
-};
-
-export default AudioVisualizer;
+  }, [isActive, inputAnalyser, 
