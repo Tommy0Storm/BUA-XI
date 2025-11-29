@@ -67,6 +67,7 @@ export function createPcmBlob(data: Float32Array, sampleRate: number): Blob {
 }
 
 // Simple Voice Activity Detection (VAD) to determine if a chunk contains speech
+// Added configurable threshold parameter
 export function hasSpeech(data: Float32Array, threshold: number = 0.01): boolean {
     let sum = 0;
     const len = data.length;
