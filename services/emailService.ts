@@ -123,9 +123,9 @@ export const sendGenericEmail = async (
 ): Promise<boolean> => {
     dispatchLog('action', 'AI Initiated Email Protocol', `Sending to: ${toEmail}`);
 
-    const serviceId = process.env.EMAILJS_SERVICE_ID;
-    const templateId = process.env.EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+    const serviceId = (import.meta as any).env?.VITE_EMAILJS_SERVICE_ID;
+    const templateId = (import.meta as any).env?.VITE_EMAILJS_TEMPLATE_ID;
+    const publicKey = (import.meta as any).env?.VITE_EMAILJS_PUBLIC_KEY;
 
     if (!serviceId || !templateId || !publicKey) {
         dispatchLog('error', 'Configuration Missing', 'GitHub Secrets (EMAILJS_*) not loaded.');
@@ -180,9 +180,9 @@ export const sendTranscriptEmail = async (
     const htmlBody = generateEmailHtml(history, durationMs / 1000, persona, sessionId);
 
     // STRICT SECURITY: Only use environment variables from GitHub Secrets
-    const serviceId = process.env.EMAILJS_SERVICE_ID;
-    const templateId = process.env.EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+    const serviceId = (import.meta as any).env?.VITE_EMAILJS_SERVICE_ID;
+    const templateId = (import.meta as any).env?.VITE_EMAILJS_TEMPLATE_ID;
+    const publicKey = (import.meta as any).env?.VITE_EMAILJS_PUBLIC_KEY;
 
     if (!serviceId || !templateId || !publicKey) {
         dispatchLog('error', 'Configuration Missing', 'GitHub Secrets (EMAILJS_*) not loaded in build.');

@@ -149,6 +149,8 @@ export function useGeminiLive({
   // Track timestamps to detect sessions that fail quickly (bad key or unsupported modality)
   const sessionOpenTimeRef = useRef<number | null>(null);
   const playedChunksRef = useRef<Set<string>>(new Set());
+  const visionTopicsRef = useRef<Set<string>>(new Set());
+  const lastVisionEmailRef = useRef<number>(0);
 
   useEffect(() => {
     personaRef.current = persona;
@@ -811,6 +813,30 @@ export function useGeminiLive({
                 if (modelText) {
                   conversationHistoryRef.current.push({ role: 'model', text: modelText, timestamp: Date.now() });
                   setTranscript(modelText);
+                  
+                  // Check if vision was active and model discussed visual topics
+                  if (isVideoActive && modelText.length > 50) {
+                    const now = Date.now();
+                    if (now - lastVisionEmailRef.current > 30000) { // throttle: 30s between emails
+                      const topics = modelText.match(/(?:I see|I notice|looking at|shows?|displays?|appears?|contains?|depicts?)\s+([^.!?]{10,80})/gi);
+                      if (topics && topics.length > 0) {
+                        lastVisionEmailRef.current = now;
+                        topics.slice(0, 3).forEach(async (topic) => {
+                          const cleanTopic = topic.trim().substring(0, 100);
+                          if (!visionTopicsRef.current.has(cleanTopic)) {
+                            visionTopicsRef.current.add(cleanTopic);
+                            await sendGenericEmail(
+                              userEmail || 'noreply@local',
+                              `Vision Analysis: ${cleanTopic.substring(0, 50)}`,
+                              `${personaRef.current.name} analyzed your ${isVideoActive ? 'camera/screen' : 'visual input'}:\n\n${modelText}`,
+                              personaRef.current.name,
+                              connectionIdRef.current || 'unknown'
+                            );
+                          }
+                        });
+                      }
+                    }
+                  }
                 }
                 currentInputTranscriptionRef.current = '';
                 currentOutputTranscriptionRef.current = '';
@@ -828,6 +854,18 @@ export function useGeminiLive({
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `send_email argsKeys=${Object.keys(call.args || {}).join(',')}`);
                   const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Sent' : 'Failed' } }] }));
+                } else if (call.name === 'query_lra_document') {
+                  if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
+                  const result = `I have access to the LRA Code of Conduct Dismissals (4 Sept 2025) document. For specific clauses, I recommend using Google Search to verify the latest information.`;
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result } }] }));
+                } else if (call.name === 'google_search' || call.name === 'google_maps') {
+                  const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
+                  const query = (call.args as any).query || (call.args as any).location || 'N/A';
+                  dispatchLog('info', `${toolName} Tool`, `Query: ${query}`);
+                  const emailSubject = `${toolName} Results: ${query}`;
+                  const emailBody = `Your ${personaRef.current.name} agent performed a ${toolName} query:\n\nQuery: ${query}\n\nResults will be provided in the conversation.`;
+                  await sendGenericEmail(userEmail || 'noreply@local', emailSubject, emailBody, personaRef.current.name, connectionIdRef.current || 'unknown');
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Emailed to user' } }] }));
                 }
               }
             }

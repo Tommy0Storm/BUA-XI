@@ -377,17 +377,21 @@ export const ChatWidget: React.FC = () => {
                 <div className={`absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none transition-opacity duration-500 ${isVideoActive ? 'opacity-100' : 'opacity-0'}`}></div>
 
                 {/* 1. Voice Header */}
-                <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center pointer-events-none">
-                    <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 shadow-sm">
+                <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center">
+                    <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 shadow-sm pointer-events-none">
                         <div className={`w-2 h-2 rounded-full ${status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
                         <span className={`text-xs font-mono font-medium tracking-wide ${isTimeLow ? 'text-red-400' : 'text-gray-300'}`}>
                             {status === 'connecting' ? 'CONNECTING...' : formattedTime}
                         </span>
                     </div>
                     
-                    <div className="p-2 text-white/30 rounded-full opacity-30 pointer-events-none">
+                    <button 
+                        onClick={() => handleDisconnect(true)}
+                        className="p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-all active:scale-95"
+                        title="End Call"
+                    >
                         <X size={20} strokeWidth={1.5} />
-                    </div>
+                    </button>
                 </div>
 
                 {/* 2. The Visualizer Stage */}
