@@ -1121,22 +1121,21 @@ export function useGeminiLive({
 
       sessionRef.current = sessionPromise;
 
-      // Setup ScriptProcessorNode callback with enhanced mobile mic normalization
+      // Setup ScriptProcessorNode callback with RMS normalization from colab.txt
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (!safeToSpeakRef.current) return;
         if (!isConnectedRef.current || isMicMutedRef.current) return;
-        if (modelIsSpeakingRef.current) return;
         
         let pcm = e.inputBuffer.getChannelData(0);
         
-        // Enhanced RMS normalization for mobile - higher target and gain for better pickup
+        // RMS normalization for mobile mic quality (colab.txt pattern)
         let sumSquares = 0;
         for (let i = 0; i < pcm.length; i++) sumSquares += pcm[i] * pcm[i];
         const rms = Math.sqrt(sumSquares / pcm.length);
         
-        if (rms > 0.0005) {
-          const targetRms = 0.25; // Increased from 0.15 for better mobile sensitivity
-          const gain = Math.min(targetRms / rms, 5.0); // Increased max gain from 3.0 to 5.0
+        if (rms > 0.001) {
+          const targetRms = 0.15;
+          const gain = Math.min(targetRms / rms, 3.8); // Adjusted to 3.8 as requested
           const normalized = new Float32Array(pcm.length);
           for (let i = 0; i < pcm.length; i++) {
             let v = pcm[i] * gain;
@@ -1146,6 +1145,20 @@ export function useGeminiLive({
             normalized[i] = v;
           }
           pcm = normalized;
+        }
+        
+        // Auto-interrupt when user speaks (if enabled)
+        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.02) {
+          const now = Date.now();
+          if (now - lastInterruptionTsRef.current > 500) {
+            lastInterruptionTsRef.current = now;
+            sessionPromise.then((session: any) => {
+              try {
+                session.sendRealtimeInput({ interruption: {} });
+                if (verbose) dispatchLog('info', 'Auto-Interrupt', 'User speaking');
+              } catch (e) {}
+            }).catch(() => {});
+          }
         }
         
         const blob = createPcmBlob(pcm, AUDIO_CONFIG.inputSampleRate);
