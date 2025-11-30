@@ -560,7 +560,21 @@ export const ChatWidget: React.FC = () => {
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-fade-in pointer-events-none">
             <div className="bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 max-w-sm">
               <div className="font-bold text-sm mb-1">{persona.name} - {persona.role}</div>
-              <div className="text-gray-300 text-xs">{persona.description}</div>
+              <div className="text-gray-300 text-xs mb-2">{persona.description}</div>
+              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <Globe size={12} className="text-emerald-400" />
+                  <span>Search</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <Mail size={12} className="text-blue-400" />
+                  <span>Email</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <Video size={12} className="text-purple-400" />
+                  <span>Vision</span>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -734,7 +748,7 @@ export const ChatWidget: React.FC = () => {
                                 className="w-full px-4 py-2 text-xs rounded-xl border-2 border-gray-200 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 appearance-none hover:border-gray-400 transition-colors"
                                 title="Runtime model selection">
                                 <option value="gemini-live-2.5-flash-preview">PoLYGLoT Standard</option>
-                                <option value="gemini-2.5-flash-native-audio-preview-09-2025">PoLYGLoT Advanced</option>
+                                <option value="gemini-2.5-flash-native-audio-preview-09-2025">PoLYGLoT Native</option>
                             </select>
                             <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                                 <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-500"></div>
