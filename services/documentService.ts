@@ -3,13 +3,23 @@
 
 export async function queryLRADocument(query: string): Promise<string> {
   try {
-    // Fetch the PDF document
-    const response = await fetch('/documents/lra-code-of-conduct-dismissals-2025.pdf');
+    const response = await fetch('/documents/lra-code-of-conduct-dismissals-2025.txt');
     if (!response.ok) throw new Error('Document not found');
+    const text = await response.text();
+    const lowerQuery = query.toLowerCase();
+    const lines = text.split('\n');
+    const matches: string[] = [];
     
-    // For now, return a reference to the document
-    // In production, you'd use a PDF parser or backend service
-    return `I have access to the LRA Code of Conduct Dismissals (4 Sept 2025) document. However, I need to use Google Search to verify specific clauses. Let me search for: "${query}"`;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes(lowerQuery)) {
+        const start = Math.max(0, i - 2);
+        const end = Math.min(lines.length, i + 3);
+        matches.push(lines.slice(start, end).join('\n'));
+        if (matches.length >= 3) break;
+      }
+    }
+    
+    return matches.length > 0 ? matches.join('\n\n---\n\n') : 'No relevant sections found in LRA document.';
   } catch (error) {
     return 'Unable to access the LRA document at this time.';
   }

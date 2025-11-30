@@ -856,7 +856,8 @@ export function useGeminiLive({
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Sent' : 'Failed' } }] }));
                 } else if (call.name === 'query_lra_document') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
-                  const result = `I have access to the LRA Code of Conduct Dismissals (4 Sept 2025) document. For specific clauses, I recommend using Google Search to verify the latest information.`;
+                  const { queryLRADocument } = await import('../services/documentService');
+                  const result = await queryLRADocument((call.args as any).query);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result } }] }));
                 } else if (call.name === 'google_search' || call.name === 'google_maps') {
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
