@@ -327,6 +327,7 @@ export function useGeminiLive({
       // using rAF here is too frequent and causes high CPU / network load for vision frames
       const loop = async () => {
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
+        if (!videoStreamRef.current) return; // Only send frames if camera is actually active
         if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
           canvas.width = videoRef.current!.videoWidth;
           canvas.height = videoRef.current!.videoHeight;
@@ -375,8 +376,9 @@ export function useGeminiLive({
     const duration = Date.now() - connectStartTimeRef.current;
     try { localStorage.removeItem('bua_transcript_backup'); } catch (e) {}
 
-    if (duration > 20000 && conversationHistoryRef.current.length > 0) {
-      dispatchLog('action', 'Tripswitch Activated', `Duration: ${Math.round(duration / 1000)}s`);
+    // Always send transcript if there's conversation history, regardless of duration
+    if (conversationHistoryRef.current.length > 0) {
+      dispatchLog('action', 'Sending Transcript', `Duration: ${Math.round(duration / 1000)}s`);
       const success = await sendTranscriptEmail(
         conversationHistoryRef.current,
         duration,
@@ -389,7 +391,7 @@ export function useGeminiLive({
         setTimeout(() => setTranscriptSent(false), 5000); // Hide after 5 seconds
       }
     } else {
-      dispatchLog('info', 'Session Ended', 'Duration < 20s. No transcript needed.');
+      dispatchLog('info', 'Session Ended', 'No conversation to transcript.');
     }
 
     isDispatchingRef.current = false;
@@ -499,6 +501,23 @@ export function useGeminiLive({
       setError('API Key is missing. Please set VITE_API_KEYS or VITE_API_KEY in your .env and restart dev server.');
       setStatus('error');
       return;
+    }
+
+    // Request location permission when user starts session
+    if (navigator.geolocation && !userLocationRef.current) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          userLocationRef.current = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          dispatchLog('success', 'Location', `Acquired: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`);
+        },
+        (error) => {
+          if (verbose) dispatchLog('warn', 'Location', `Denied or unavailable: ${error.message}`);
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+      );
     }
 
     // stop any previous audio graph
@@ -680,12 +699,12 @@ export function useGeminiLive({
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: personaRef.current.voiceName } }
           },
-          systemInstruction: systemInstructionToUse + userEmailContext,
+          systemInstruction: systemInstructionToUse + userEmailContext + (userLocationRef.current ? `\n\nUSER LOCATION: Latitude ${userLocationRef.current.latitude}, Longitude ${userLocationRef.current.longitude}. Use this for location-based searches.` : ''),
           temperature: personaRef.current.temperature ?? 0.7,
           tools: LIVE_API_TOOLS,
-          toolConfig: userLocationRef.current ? { retrievalConfig: { latLng: userLocationRef.current } } : undefined,
-          inputAudioTranscription: {},
-          outputAudioTranscription: {}
+          toolConfig: userLocationRef.current ? { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } } : undefined,
+          inputAudioTranscription: { model: 'default', languageCode: 'en-ZA' },
+          outputAudioTranscription: { model: 'default', languageCode: 'en-ZA' }
         },
         callbacks: {
           onopen: () => {
@@ -719,23 +738,6 @@ export function useGeminiLive({
                 clearInterval(heartbeatInterval);
               }
             }, 10000); // every 10 seconds
-
-            // Request user location for Google Maps integration
-            if (navigator.geolocation && !userLocationRef.current) {
-              navigator.geolocation.getCurrentPosition(
-                (position) => {
-                  userLocationRef.current = {
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
-                  };
-                  dispatchLog('success', 'Location', `Acquired: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`);
-                },
-                (error) => {
-                  if (verbose) dispatchLog('warn', 'Location', `Denied or unavailable: ${error.message}`);
-                },
-                { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
-              );
-            }
 
             // Enable mic after short warmup
             setTimeout(() => {
@@ -851,8 +853,14 @@ export function useGeminiLive({
               }
               
               // Log if we're getting input transcription (proves audio is being processed)
+              // Filter out noise tags and non-English garbage
               if (serverContent.inputTranscription?.text) {
-                dispatchLog('success', 'Input Heard', `"${sanitizeLog(serverContent.inputTranscription.text)}"`);
+                const rawText = serverContent.inputTranscription.text;
+                const cleanText = rawText.replace(/<noise>/g, '').trim();
+                // Only log if it's not just noise or non-Latin characters
+                if (cleanText && /[a-zA-Z]/.test(cleanText)) {
+                  dispatchLog('success', 'Input Heard', `"${sanitizeLog(cleanText)}"`);
+                }
               }
               if (serverContent.outputTranscription?.text) {
                 currentOutputTranscriptionRef.current += serverContent.outputTranscription.text;
@@ -928,9 +936,21 @@ export function useGeminiLive({
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'ok' } }] }));
                 } else if (call.name === 'send_email') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `send_email argsKeys=${Object.keys(call.args || {}).join(',')}`);
-                  const template = (call.args as any).template || 'standard';
-                  const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name, connectionIdRef.current || 'unknown', template, []);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Sent' : 'Failed' } }] }));
+                  try {
+                    const template = (call.args as any).template || 'standard';
+                    const body = (call.args as any).body || '';
+                    // Validate that body has actual content, not placeholder text
+                    if (!body || body.length < 20 || /\[list of|\[placeholder|\[insert/.test(body)) {
+                      dispatchLog('warn', 'Email Rejected', 'Body contains placeholder text or is too short');
+                      sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Email body must contain actual information, not placeholders. Please provide the full details.' } }] }));
+                    } else {
+                      const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, body, personaRef.current.name, connectionIdRef.current || 'unknown', template, []);
+                      sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Email sent successfully with full details' : 'Email failed to send' } }] }));
+                    }
+                  } catch (e) {
+                    dispatchLog('error', 'Email Tool Error', String(e));
+                    sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Error sending email' } }] }));
+                  }
                 } else if (call.name === 'query_lra_document') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
                   const { queryLRADocument } = await import('../services/documentService');
@@ -971,7 +991,7 @@ export function useGeminiLive({
                   const ms = minutes * 60 * 1000;
                   setTimeout(() => {
                     if ('Notification' in window && Notification.permission === 'granted') {
-                      new Notification('Bua X1 Reminder', { body: message, icon: '/favicon.ico' });
+                      new Notification('VCB PoLYGoN Reminder', { body: message, icon: '/favicon.ico' });
                     } else {
                       alert(`Reminder: ${message}`);
                     }
@@ -1000,7 +1020,7 @@ export function useGeminiLive({
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Calendar event created' } }] }));
                 } else if (call.name === 'share_content') {
                   const shareData = {
-                    title: (call.args as any).title || 'Bua X1',
+                    title: (call.args as any).title || 'VCB PoLYGoN',
                     text: (call.args as any).text,
                     url: (call.args as any).url
                   };
@@ -1128,14 +1148,14 @@ export function useGeminiLive({
         
         let pcm = e.inputBuffer.getChannelData(0);
         
-        // RMS normalization for mobile mic quality (colab.txt pattern)
+        // RMS normalization from colab.txt - targetRms 0.1 to prevent noise
         let sumSquares = 0;
         for (let i = 0; i < pcm.length; i++) sumSquares += pcm[i] * pcm[i];
         const rms = Math.sqrt(sumSquares / pcm.length);
         
         if (rms > 0.001) {
-          const targetRms = 0.15;
-          const gain = Math.min(targetRms / rms, 3.8); // Adjusted to 3.8 as requested
+          const targetRms = 0.1; // Colab.txt recommended value
+          const gain = Math.min(targetRms / rms, 2.5); // Reduced from 3.8 to prevent over-amplification
           const normalized = new Float32Array(pcm.length);
           for (let i = 0; i < pcm.length; i++) {
             let v = pcm[i] * gain;
@@ -1152,10 +1172,18 @@ export function useGeminiLive({
           const now = Date.now();
           if (now - lastInterruptionTsRef.current > 500) {
             lastInterruptionTsRef.current = now;
+            // Stop all active audio sources immediately
+            activeSourcesRef.current.forEach(src => {
+              try { src.stop(); src.disconnect(); } catch (e) {}
+            });
+            activeSourcesRef.current.clear();
+            nextStartTimeRef.current = outputCtx.currentTime;
+            modelIsSpeakingRef.current = false;
+            // Send interruption signal to API
             sessionPromise.then((session: any) => {
               try {
                 session.sendRealtimeInput({ interruption: {} });
-                if (verbose) dispatchLog('info', 'Auto-Interrupt', 'User speaking');
+                if (verbose) dispatchLog('info', 'Auto-Interrupt', 'User speaking - audio stopped');
               } catch (e) {}
             }).catch(() => {});
           }

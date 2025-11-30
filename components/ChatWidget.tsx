@@ -807,7 +807,7 @@ export const ChatWidget: React.FC = () => {
                      <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
                 </div>
                 <div className="flex flex-col items-start leading-none mr-3">
-                    <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider mb-1">VCB PoLYGLoT</span>
+                    <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider mb-1">VCB PoLYGoN</span>
                     <span className="text-lg font-extrabold">Try Live Demo</span>
                 </div>
                 <ChevronRight size={20} className="text-white/80 group-hover:text-white group-hover:translate-x-1 transition-transform" />
