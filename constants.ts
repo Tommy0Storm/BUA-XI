@@ -26,13 +26,14 @@ const LANGUAGE_FUNC: FunctionDeclaration = {
 
 const EMAIL_FUNC: FunctionDeclaration = {
   name: 'send_email',
-  description: 'Send email when user requests transcript or summary.',
+  description: 'Send email to user with important information, summaries, or follow-up details. Use when user requests it or when sharing critical information that should be saved (e.g., directions, search results, recommendations, legal advice, meeting notes).',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      subject: { type: Type.STRING },
-      body: { type: Type.STRING },
-      recipient_email: { type: Type.STRING }
+      subject: { type: Type.STRING, description: 'Clear, concise email subject line' },
+      body: { type: Type.STRING, description: 'Well-formatted email body with the information to send' },
+      recipient_email: { type: Type.STRING, description: 'Recipient email address (optional, defaults to user email)' },
+      template: { type: Type.STRING, enum: ['standard', 'legal'], description: 'Email template: standard for general info, legal for legal advice with plain language explanations' }
     },
     required: ['subject', 'body'],
   },

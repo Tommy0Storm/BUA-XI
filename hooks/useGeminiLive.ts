@@ -830,7 +830,8 @@ export function useGeminiLive({
                               `Vision Analysis: ${cleanTopic.substring(0, 50)}`,
                               `${personaRef.current.name} analyzed your ${isVideoActive ? 'camera/screen' : 'visual input'}:\n\n${modelText}`,
                               personaRef.current.name,
-                              connectionIdRef.current || 'unknown'
+                              connectionIdRef.current || 'unknown',
+                              'standard'
                             );
                           }
                         });
@@ -852,7 +853,8 @@ export function useGeminiLive({
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'ok' } }] }));
                 } else if (call.name === 'send_email') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `send_email argsKeys=${Object.keys(call.args || {}).join(',')}`);
-                  const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name);
+                  const template = (call.args as any).template || 'standard';
+                  const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name, connectionIdRef.current || 'unknown', template);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Sent' : 'Failed' } }] }));
                 } else if (call.name === 'query_lra_document') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
@@ -865,7 +867,7 @@ export function useGeminiLive({
                   dispatchLog('info', `${toolName} Tool`, `Query: ${query}`);
                   const emailSubject = `${toolName} Results: ${query}`;
                   const emailBody = `Your ${personaRef.current.name} agent performed a ${toolName} query:\n\nQuery: ${query}\n\nResults will be provided in the conversation.`;
-                  await sendGenericEmail(userEmail || 'noreply@local', emailSubject, emailBody, personaRef.current.name, connectionIdRef.current || 'unknown');
+                  await sendGenericEmail(userEmail || 'noreply@local', emailSubject, emailBody, personaRef.current.name, connectionIdRef.current || 'unknown', 'standard');
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Emailed to user' } }] }));
                 }
               }
