@@ -132,7 +132,7 @@ export function useGeminiLive({
 
   // Demo timer ref and time tracking for UI
   const demoTimerRef = useRef<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(120);
+  const [timeLeft, setTimeLeft] = useState<number>(persona.maxDurationSeconds || 120);
   const [transcriptSent, setTranscriptSent] = useState<boolean>(false);
 
   // Store user's location if available
@@ -716,17 +716,19 @@ export function useGeminiLive({
               dispatchLog('success', 'Ready', 'Mic active - you can speak now');
             }, 1000);
 
-            // demo timer disabled for debugging
+            // Start demo timer
             if (demoTimerRef.current) window.clearInterval(demoTimerRef.current);
-            // demoTimerRef.current = window.setInterval(() => {
-            //   setTimeLeft(prev => {
-            //     if (prev <= 1) {
-            //       disconnect('Demo time limit reached.');
-            //       return 0;
-            //     }
-            //     return prev - 1;
-            //   });
-            // }, 1000);
+            const maxDuration = personaRef.current.maxDurationSeconds || 120;
+            setTimeLeft(maxDuration);
+            demoTimerRef.current = window.setInterval(() => {
+              setTimeLeft(prev => {
+                if (prev <= 1) {
+                  disconnect('Demo time limit reached.', true);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
           },
           onmessage: async (msg: LiveServerMessage) => {
             if (connectionIdRef.current !== myConnectionId) return;

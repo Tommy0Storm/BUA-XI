@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { LiveConsole } from './components/LiveConsole';
 import { ChatWidget } from './components/ChatWidget';
-import { Zap, FileText, Globe, Lock, ShieldCheck, Database, FileSpreadsheet, Send, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Zap, FileText, Globe, Lock, ShieldCheck, Database, FileSpreadsheet, Send, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 
 export default function App() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showConsole, setShowConsole] = useState(false);
   const [showChatWidget, setShowChatWidget] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     const handleTranscriptSent = () => {
@@ -18,11 +19,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % 3);
     }, 10000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused]);
 
 
 
@@ -82,7 +84,7 @@ export default function App() {
       </div>
     </div>,
 
-    <div key="enterprise" className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 text-white overflow-y-auto">
+    <div key="enterprise" className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 text-white overflow-y-auto dark-scroll">
       <div className="w-full bg-gray-700 py-4 sm:py-6 px-4 sm:px-8 flex items-center justify-center max-w-[1920px] mx-auto">
         <a href="https://vcb-ai.online" className="flex items-center gap-3 sm:gap-4">
           <img src="logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
@@ -191,19 +193,25 @@ export default function App() {
 
   return (
     <div className="relative h-screen overflow-hidden">
+      {slides.map((slide, i) => (
+        <div key={i} className={`absolute inset-0 transition-opacity duration-[3000ms] ${i === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}>
+          {slide}
+        </div>
+      ))}
 
-      <div className="h-full transition-all duration-1000 ease-in-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
-        <div className="flex h-full">
-          {slides.map((slide, i) => (
-            <div key={i} className="min-w-full h-full">{slide}</div>
+      <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-[45] flex gap-3 items-center">
+        <button 
+          onClick={() => setIsPaused(!isPaused)} 
+          className="w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-all shadow-lg"
+          title={isPaused ? "Resume slideshow" : "Pause slideshow"}
+        >
+          {isPaused ? <Play size={16} className="text-gray-900" /> : <Pause size={16} className="text-gray-900" />}
+        </button>
+        <div className="flex gap-2">
+          {[0, 1, 2].map((i) => (
+            <button key={i} onClick={() => setCurrentSlide(i)} className={`w-2 h-2 rounded-full transition-all ${currentSlide === i ? 'bg-white w-8' : 'bg-white/50'}`}></button>
           ))}
         </div>
-      </div>
-
-      <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-40 flex gap-2 items-center">
-        {[0, 1, 2].map((i) => (
-          <button key={i} onClick={() => setCurrentSlide(i)} className={`w-2 h-2 rounded-full transition-all ${currentSlide === i ? 'bg-white w-8' : 'bg-white/50'}`}></button>
-        ))}
       </div>
 
       {showConsole && (
