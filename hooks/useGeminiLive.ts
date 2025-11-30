@@ -504,7 +504,13 @@ export function useGeminiLive({
     // don't print keys; print only the number of keys (safe)
     dispatchLog('info', 'Connecting...', `Using key index ${nextIndex} of ${apiKeys.length}`);
 
-    const myConnectionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    // Generate secure random 7-character alphanumeric string for session id
+    function secureRandomString(length = 7) {
+      const array = new Uint8Array(length);
+      window.crypto.getRandomValues(array);
+      return Array.from(array, b => b.toString(36).padStart(2, '0')).join('').slice(0, length);
+    }
+    const myConnectionId = `session-${Date.now()}-${secureRandomString(7)}`;
     connectionIdRef.current = myConnectionId;
 
     try {

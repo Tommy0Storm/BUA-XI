@@ -146,7 +146,7 @@ export const sendGenericEmail = async (
 
     const templateParams = {
         email: toEmail,
-        subject: `${subject} [${Math.floor(Math.random() * 10000)}]`, // Anti-threading ID
+        subject: `${subject} [${window.crypto.getRandomValues(new Uint32Array(1))[0].toString().padStart(8, '0')}]`, // Anti-threading ID
         transcript_html: wrappedBody,
         duration: "N/A",
         agent_name: agentName,
