@@ -30,7 +30,7 @@ export default function App() {
     <div key="hero" className="h-screen w-screen flex flex-col bg-white overflow-y-auto">
       <div className="w-full bg-white py-4 sm:py-6 px-4 sm:px-8 flex items-center justify-center max-w-[1920px] mx-auto">
         <a href="https://vcb-ai.online" className="flex items-center gap-3 sm:gap-4">
-          <img src="/logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
+          <img src="logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
           <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-black text-gray-900">
             P<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>LYGl<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>T <span className="text-gray-700">AI - Engine</span>
           </div>
@@ -85,7 +85,7 @@ export default function App() {
     <div key="enterprise" className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 text-white overflow-y-auto">
       <div className="w-full bg-gray-700 py-4 sm:py-6 px-4 sm:px-8 flex items-center justify-center max-w-[1920px] mx-auto">
         <a href="https://vcb-ai.online" className="flex items-center gap-3 sm:gap-4">
-          <img src="/logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
+          <img src="logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
           <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-black text-white">
             P<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>LYGl<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>T <span className="text-gray-300">AI - Engine</span>
           </div>
@@ -131,7 +131,7 @@ export default function App() {
     <div key="vision" className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-900 via-black to-gray-800 text-white overflow-y-auto">
       <div className="w-full bg-gray-900 py-4 sm:py-6 px-4 sm:px-8 flex items-center justify-center max-w-[1920px] mx-auto">
         <a href="https://vcb-ai.online" className="flex items-center gap-3 sm:gap-4">
-          <img src="/logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
+          <img src="logowhite.png" alt="VCB-AI" className="h-20 sm:h-28 lg:h-32 xl:h-36 w-auto" />
           <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-black text-white">
             P<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>LYGl<span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500">o</span>T <span className="text-gray-300">AI - Engine</span>
           </div>
