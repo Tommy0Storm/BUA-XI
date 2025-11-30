@@ -722,6 +722,23 @@ export function useGeminiLive({
               }
             }, 10000); // every 10 seconds
 
+            // Request user location for Google Maps integration
+            if (navigator.geolocation && !userLocationRef.current) {
+              navigator.geolocation.getCurrentPosition(
+                (position) => {
+                  userLocationRef.current = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                  };
+                  dispatchLog('success', 'Location', `Acquired: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`);
+                },
+                (error) => {
+                  if (verbose) dispatchLog('warn', 'Location', `Denied or unavailable: ${error.message}`);
+                },
+                { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
+              );
+            }
+
             // Enable mic after short warmup
             setTimeout(() => {
               safeToSpeakRef.current = true;
@@ -921,6 +938,85 @@ export function useGeminiLive({
                   const { queryLRADocument } = await import('../services/documentService');
                   const result = await queryLRADocument((call.args as any).query);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result } }] }));
+                } else if (call.name === 'open_maps') {
+                  if (verbose) dispatchLog('info', 'DEBUG toolCall', `open_maps destination=${(call.args as any).destination}`);
+                  const destination = encodeURIComponent((call.args as any).destination || '');
+                  const mode = (call.args as any).mode || 'driving';
+                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=${mode}`;
+                  window.open(mapsUrl, '_blank');
+                  dispatchLog('success', 'Maps Opened', `Directions to: ${(call.args as any).destination}`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Maps opened' } }] }));
+                } else if (call.name === 'make_call') {
+                  const phone = (call.args as any).phone_number;
+                  const name = (call.args as any).contact_name || phone;
+                  window.location.href = `tel:${phone}`;
+                  dispatchLog('success', 'Call Initiated', `Calling: ${name}`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Call initiated' } }] }));
+                } else if (call.name === 'open_whatsapp') {
+                  const phone = (call.args as any).phone_number;
+                  const message = (call.args as any).message ? `?text=${encodeURIComponent((call.args as any).message)}` : '';
+                  const whatsappUrl = `https://wa.me/${phone}${message}`;
+                  window.open(whatsappUrl, '_blank');
+                  dispatchLog('success', 'WhatsApp Opened', `Chat with: ${phone}`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'WhatsApp opened' } }] }));
+                } else if (call.name === 'copy_to_clipboard') {
+                  const text = (call.args as any).text;
+                  navigator.clipboard.writeText(text).then(() => {
+                    dispatchLog('success', 'Copied', `Text copied to clipboard`);
+                  }).catch(() => {
+                    dispatchLog('warn', 'Copy Failed', 'Clipboard access denied');
+                  });
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Copied to clipboard' } }] }));
+                } else if (call.name === 'set_reminder') {
+                  const message = (call.args as any).message;
+                  const minutes = (call.args as any).minutes;
+                  const ms = minutes * 60 * 1000;
+                  setTimeout(() => {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                      new Notification('Bua X1 Reminder', { body: message, icon: '/favicon.ico' });
+                    } else {
+                      alert(`Reminder: ${message}`);
+                    }
+                  }, ms);
+                  dispatchLog('success', 'Reminder Set', `In ${minutes} min: ${message}`);
+                  if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                  }
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Reminder set for ${minutes} minutes` } }] }));
+                } else if (call.name === 'send_sms') {
+                  const phone = (call.args as any).phone_number || '';
+                  const message = (call.args as any).message;
+                  const smsUrl = `sms:${phone}${phone ? '?' : ''}body=${encodeURIComponent(message)}`;
+                  window.location.href = smsUrl;
+                  dispatchLog('success', 'SMS Opened', `Message ready to send`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'SMS app opened' } }] }));
+                } else if (call.name === 'create_calendar_event') {
+                  const title = encodeURIComponent((call.args as any).title);
+                  const date = (call.args as any).date;
+                  const startTime = (call.args as any).start_time;
+                  const endTime = (call.args as any).end_time || startTime;
+                  const details = encodeURIComponent((call.args as any).details || '');
+                  const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${startTime}00/${date}T${endTime}00&details=${details}`;
+                  window.open(calendarUrl, '_blank');
+                  dispatchLog('success', 'Calendar Opened', `Event: ${(call.args as any).title}`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Calendar event created' } }] }));
+                } else if (call.name === 'share_content') {
+                  const shareData = {
+                    title: (call.args as any).title || 'Bua X1',
+                    text: (call.args as any).text,
+                    url: (call.args as any).url
+                  };
+                  if (navigator.share) {
+                    navigator.share(shareData).then(() => {
+                      dispatchLog('success', 'Shared', 'Content shared successfully');
+                    }).catch(() => {
+                      dispatchLog('warn', 'Share Cancelled', 'User cancelled share');
+                    });
+                  } else {
+                    navigator.clipboard.writeText(shareData.text + (shareData.url ? ` ${shareData.url}` : ''));
+                    dispatchLog('success', 'Copied', 'Content copied (share not supported)');
+                  }
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Content shared' } }] }));
                 } else if (call.name === 'google_search' || call.name === 'google_maps') {
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
                   const query = (call.args as any).query || (call.args as any).location || 'N/A';

@@ -51,8 +51,115 @@ const QUERY_LRA_FUNC: FunctionDeclaration = {
   },
 };
 
+const OPEN_MAPS_FUNC: FunctionDeclaration = {
+  name: 'open_maps',
+  description: 'Open the default map app with directions or location. Use when user asks for directions, navigation, or "how to get to" a place.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      destination: { type: Type.STRING, description: 'The destination address or place name' },
+      mode: { type: Type.STRING, enum: ['driving', 'walking', 'transit'], description: 'Travel mode (default: driving)' }
+    },
+    required: ['destination'],
+  },
+};
+
+const MAKE_CALL_FUNC: FunctionDeclaration = {
+  name: 'make_call',
+  description: 'Initiate a phone call. Use when user asks to call someone or a business.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      phone_number: { type: Type.STRING, description: 'Phone number with country code (e.g., +27123456789)' },
+      contact_name: { type: Type.STRING, description: 'Name of person/business being called' }
+    },
+    required: ['phone_number'],
+  },
+};
+
+const OPEN_WHATSAPP_FUNC: FunctionDeclaration = {
+  name: 'open_whatsapp',
+  description: 'Open WhatsApp chat with a contact. Use when user asks to WhatsApp someone or send a WhatsApp message.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      phone_number: { type: Type.STRING, description: 'Phone number with country code (e.g., 27123456789, no + sign)' },
+      message: { type: Type.STRING, description: 'Pre-filled message text (optional)' }
+    },
+    required: ['phone_number'],
+  },
+};
+
+const COPY_TO_CLIPBOARD_FUNC: FunctionDeclaration = {
+  name: 'copy_to_clipboard',
+  description: 'Copy text to clipboard. Use when user asks to copy information, save text, or wants to paste something later.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      text: { type: Type.STRING, description: 'Text to copy to clipboard' }
+    },
+    required: ['text'],
+  },
+};
+
+const SET_REMINDER_FUNC: FunctionDeclaration = {
+  name: 'set_reminder',
+  description: 'Set a timed reminder notification. Use when user asks to be reminded about something.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      message: { type: Type.STRING, description: 'Reminder message' },
+      minutes: { type: Type.NUMBER, description: 'Minutes from now to show reminder' }
+    },
+    required: ['message', 'minutes'],
+  },
+};
+
+const SEND_SMS_FUNC: FunctionDeclaration = {
+  name: 'send_sms',
+  description: 'Open SMS app with pre-filled message. Use when user asks to SMS or text them information.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      phone_number: { type: Type.STRING, description: 'Phone number (optional, defaults to user)' },
+      message: { type: Type.STRING, description: 'SMS message text' }
+    },
+    required: ['message'],
+  },
+};
+
+const CREATE_CALENDAR_EVENT_FUNC: FunctionDeclaration = {
+  name: 'create_calendar_event',
+  description: 'Create a calendar event. Use when user asks to schedule, book, or add something to calendar.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: 'Event title' },
+      date: { type: Type.STRING, description: 'Date in YYYYMMDD format' },
+      start_time: { type: Type.STRING, description: 'Start time in HHmm format (e.g., 1430 for 2:30 PM)' },
+      end_time: { type: Type.STRING, description: 'End time in HHmm format' },
+      details: { type: Type.STRING, description: 'Event description (optional)' }
+    },
+    required: ['title', 'date', 'start_time'],
+  },
+};
+
+const SHARE_CONTENT_FUNC: FunctionDeclaration = {
+  name: 'share_content',
+  description: 'Share text/link via native share menu. Use when user asks to share information with someone.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      title: { type: Type.STRING, description: 'Share title' },
+      text: { type: Type.STRING, description: 'Text to share' },
+      url: { type: Type.STRING, description: 'URL to share (optional)' }
+    },
+    required: ['text'],
+  },
+};
+
 export const LIVE_API_TOOLS: Tool[] = [
-  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC] },
+  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC] },
   { googleSearch: {} },
 ];
 
