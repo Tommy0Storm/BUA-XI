@@ -577,9 +577,7 @@ export function useGeminiLive({
           channelCount: 1,
           echoCancellation: true,
           autoGainControl: true,
-          noiseSuppression: true,
-          latency: 0.01,
-          volume: 1.0
+          noiseSuppression: true
         }
       });
       streamRef.current = stream;
