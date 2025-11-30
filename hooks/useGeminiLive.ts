@@ -152,6 +152,7 @@ export function useGeminiLive({
   const wakeSentRef = useRef(false);
   const firstResponseReceivedRef = useRef(false);
   const modelIsSpeakingRef = useRef(false);
+  const greetingSentRef = useRef(false);
   // Track timestamps to detect sessions that fail quickly (bad key or unsupported modality)
   const sessionOpenTimeRef = useRef<number | null>(null);
   const playedChunksRef = useRef<Set<string>>(new Set());
@@ -488,6 +489,7 @@ export function useGeminiLive({
     // stop any previous audio graph
     stopAudio();
     isConnectedRef.current = false;
+    greetingSentRef.current = false;
     setTranscript('');
     setError(null);
     isDispatchingRef.current = false;

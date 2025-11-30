@@ -178,8 +178,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
              }
              inputVol = Math.sqrt(sum / (data.length / 8));
              
-             // ADJUSTMENT: Reduced multiplier from 2.5 to 1.8 to fix "mic boost too much"
-             inputVol *= 1.8; 
+             // Increased sensitivity for clearer mic detection
+             inputVol *= 4.5; 
           }
 
           if (outputAnalyser && outputDataRef.current) {
@@ -192,8 +192,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
                  sum += v * v;
              }
              outputVol = Math.sqrt(sum / (data.length / 8));
-             // Moderate boost for AI
-             outputVol *= 2.0; 
+             // Increased sensitivity for clearer AI speech detection
+             outputVol *= 5.0; 
           }
       }
 
@@ -278,8 +278,8 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           ctx.rotate(state.rotation);
           
           ctx.beginPath();
-          // Loop through history efficiently using circular buffer logic
-          for(let i = 0; i < HIST_LEN; i += 2) {
+          // 3x denser graph - sample every point instead of every 2nd
+          for(let i = 0; i < HIST_LEN; i++) {
               // Calculate index: (Head - 1 - i + Length) % Length
               const index = (state.historyHead - 1 - i + HIST_LEN) % HIST_LEN;
               const val = state.history[index];
