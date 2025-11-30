@@ -215,7 +215,7 @@ export default function App() {
         </div>
       )}
 
-      {showChatWidget && <ChatWidget />}
+      <ChatWidget />
 
     </div>
   );
