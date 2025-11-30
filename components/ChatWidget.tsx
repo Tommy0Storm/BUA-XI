@@ -172,7 +172,7 @@ export const ChatWidget: React.FC = () => {
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
 
-  const { status, connect, disconnect, setManualUserAction, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent, isPttMode, setPttMode, setPttActive, isVideoActive, toggleVideo, startScreenShare, videoRef, audioDevices, selectedAudioDeviceId, setSelectedAudioDeviceId } = useGeminiLive({
+  const { status, connect, disconnect, setManualUserAction, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent, isPttMode, setPttMode, setPttActive, isVideoActive, toggleVideo, startScreenShare, switchCamera, facingMode, videoRef, audioDevices, selectedAudioDeviceId, setSelectedAudioDeviceId } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
     userEmail: userEmail,
@@ -464,6 +464,16 @@ export const ChatWidget: React.FC = () => {
                             icon={isVideoActive ? <Video size={16} /> : <VideoOff size={16} className="text-gray-400" />}
                             label={isVideoActive ? "Turn Camera Off" : "Turn Camera On"}
                          />
+                         
+                         {isVideoActive && (
+                           <ControlBtn 
+                              active={false}
+                              onClick={switchCamera}
+                              variant={'secondary'}
+                              icon={<span className="text-[10px] font-bold">{facingMode === 'user' ? '🤳' : '📷'}</span>}
+                              label={`Switch to ${facingMode === 'user' ? 'Back' : 'Front'} Camera`}
+                           />
+                         )}
 
                          <ControlBtn 
                             active={false}

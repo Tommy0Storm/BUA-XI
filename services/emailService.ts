@@ -156,12 +156,12 @@ export const sendGenericEmail = async (
             <img src="https://i.postimg.cc/vBTy1d27/logo-Wtext-transparent-Black-Back.png" alt="VCB-AI" style="max-width: 200px; height: auto;" />
         </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0; text-align: center; margin-top: 20px;">
-            <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 600;">⚖️ Legal Advice Summary</h1>
+            <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 600;">${subject.includes('Session Started') ? '🔒 CONFIDENTIAL SESSION' : '⚖️ Legal Discussion'}</h1>
             <p style="color: #e0e0e0; margin: 8px 0 0 0; font-size: 14px;">From ${sanitizeHtml(agentName)}</p>
         </div>
         <div style="background-color: #16213e; padding: 30px; border-radius: 0 0 8px 8px;">
             <div style="background-color: #0f3460; border-left: 4px solid #667eea; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-                <p style="margin: 0; font-size: 13px; color: #a0a0a0; font-weight: 600;">📋 PLAIN LANGUAGE EXPLANATION</p>
+                <p style="margin: 0; font-size: 13px; color: #a0a0a0; font-weight: 600;">📋 LEGAL ANALYSIS</p>
             </div>
             <div style="line-height: 1.8; font-size: 16px; color: #e0e0e0;">
                 ${sanitizeHtml(bodyHtml).replace(/\n/g, '<br>')}

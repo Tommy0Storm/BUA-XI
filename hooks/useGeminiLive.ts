@@ -282,6 +282,16 @@ export function useGeminiLive({
     }
   }, []);
 
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  
+  const switchCamera = useCallback(() => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+    if (isVideoActive) {
+      stopVideo();
+      setTimeout(() => startVideo(false), 100);
+    }
+  }, [isVideoActive]);
+  
   const startVideo = useCallback(async (useScreenShare = false) => {
     // If vision is disabled for this session, avoid starting camera or prompting for permission
     if (!enableVisionRef.current) {
@@ -295,7 +305,12 @@ export function useGeminiLive({
             video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 5 } }
           })
         : await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 5 } }
+            video: { 
+              width: { ideal: 640 }, 
+              height: { ideal: 480 }, 
+              frameRate: { ideal: 5 },
+              facingMode: facingMode
+            }
           });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -554,7 +569,7 @@ export function useGeminiLive({
       gainNode.connect(outputAnalyser);
       outputAnalyser.connect(outputCtx.destination);
 
-      // INPUT DSP - Use ScriptProcessorNode like colab
+      // INPUT DSP - Use ScriptProcessorNode like colab with enhanced mobile settings
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           deviceId: selectedAudioDeviceId ? { exact: selectedAudioDeviceId } : undefined,
@@ -562,7 +577,9 @@ export function useGeminiLive({
           channelCount: 1,
           echoCancellation: true,
           autoGainControl: true,
-          noiseSuppression: true
+          noiseSuppression: true,
+          latency: 0.01,
+          volume: 1.0
         }
       });
       streamRef.current = stream;
@@ -657,6 +674,7 @@ export function useGeminiLive({
       const chosenModel = modelOverride ?? forcedModelRef.current ?? MODELS.nativeAudio;
       if (verbose) dispatchLog('info', 'DEBUG', `Using model: ${chosenModel} (vision:${enableVisionRef.current})`);
 
+      const userEmailContext = userEmail ? `\n\nUSER EMAIL: ${userEmail}` : '';
       const sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
@@ -664,7 +682,7 @@ export function useGeminiLive({
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: personaRef.current.voiceName } }
           },
-          systemInstruction: systemInstructionToUse,
+          systemInstruction: systemInstructionToUse + userEmailContext,
           temperature: personaRef.current.temperature ?? 0.7,
           tools: LIVE_API_TOOLS,
           toolConfig: userLocationRef.current ? { retrievalConfig: { latLng: userLocationRef.current } } : undefined,
@@ -709,6 +727,18 @@ export function useGeminiLive({
               safeToSpeakRef.current = true;
               firstResponseReceivedRef.current = true;
               dispatchLog('success', 'Ready', 'Mic active - you can speak now');
+              
+              // Send initial context message for Dark Matter persona
+              if (personaRef.current.id === 'dark_matter' && userEmail) {
+                sessionPromise.then((session: any) => {
+                  try {
+                    session.send(`User email: ${userEmail}. System prompt active. Begin greeting.`);
+                    if (verbose) dispatchLog('info', 'Context Sent', 'Email and prompt sent to Dark Matter');
+                  } catch (e) {
+                    if (verbose) dispatchLog('warn', 'Context Failed', String(e));
+                  }
+                }).catch(() => {});
+              }
             }, 1000);
 
             // Start demo timer
@@ -997,13 +1027,33 @@ export function useGeminiLive({
 
       sessionRef.current = sessionPromise;
 
-      // Setup ScriptProcessorNode callback like colab
+      // Setup ScriptProcessorNode callback with enhanced mobile mic normalization
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (!safeToSpeakRef.current) return;
         if (!isConnectedRef.current || isMicMutedRef.current) return;
         if (modelIsSpeakingRef.current) return;
         
-        const pcm = e.inputBuffer.getChannelData(0);
+        let pcm = e.inputBuffer.getChannelData(0);
+        
+        // Enhanced RMS normalization for mobile - higher target and gain for better pickup
+        let sumSquares = 0;
+        for (let i = 0; i < pcm.length; i++) sumSquares += pcm[i] * pcm[i];
+        const rms = Math.sqrt(sumSquares / pcm.length);
+        
+        if (rms > 0.0005) {
+          const targetRms = 0.25; // Increased from 0.15 for better mobile sensitivity
+          const gain = Math.min(targetRms / rms, 5.0); // Increased max gain from 3.0 to 5.0
+          const normalized = new Float32Array(pcm.length);
+          for (let i = 0; i < pcm.length; i++) {
+            let v = pcm[i] * gain;
+            // Soft limiting to prevent clipping
+            if (v > 1) v = 1 - (1 / (v + 1e-6));
+            if (v < -1) v = -1 + (1 / (-v + 1e-6));
+            normalized[i] = v;
+          }
+          pcm = normalized;
+        }
+        
         const blob = createPcmBlob(pcm, AUDIO_CONFIG.inputSampleRate);
         
         sessionPromise.then((session: any) => {
@@ -1067,6 +1117,8 @@ export function useGeminiLive({
     isVideoActive,
     toggleVideo,
     startScreenShare,
+    switchCamera,
+    facingMode,
     videoRef,
     audioDevices,
     selectedAudioDeviceId,
