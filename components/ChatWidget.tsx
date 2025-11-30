@@ -23,7 +23,7 @@ import { sendTranscriptEmail } from '../services/emailService';
 import { 
   X, Mic, MicOff, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe
 } from 'lucide-react';
 
 // --- VOICE UI KIT PRIMITIVES ---
