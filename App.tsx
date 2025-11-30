@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// Trigger workflow update - retry
+// Trigger workflow update - retry 2
 import { LiveConsole } from './components/LiveConsole';
 import { ChatWidget } from './components/ChatWidget';
 import { Zap, FileText, Globe, Lock, ShieldCheck, Database, FileSpreadsheet, Send, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
