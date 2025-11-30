@@ -138,22 +138,6 @@ export function useGeminiLive({
   // Store user's location if available
   const userLocationRef = useRef<{latitude: number; longitude: number} | null>(null);
 
-  // Request user location on mount
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          userLocationRef.current = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude
-          };
-          if (verbose) dispatchLog('success', 'Location', `Lat: ${pos.coords.latitude.toFixed(4)}, Lng: ${pos.coords.longitude.toFixed(4)}`);
-        },
-        () => { if (verbose) dispatchLog('info', 'Location', 'Permission denied or unavailable'); }
-      );
-    }
-  }, [verbose]);
-
   const failedKeyMapRef = useRef<Record<string, number>>({});
   const currentKeyIndexRef = useRef(0);
   const retryCountRef = useRef(0);
