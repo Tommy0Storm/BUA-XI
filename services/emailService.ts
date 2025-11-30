@@ -197,7 +197,7 @@ export const sendGenericEmail = async (
 
     const templateParams = {
         email: toEmail,
-        subject: `${subject} [${Math.floor(Math.random() * 10000)}]`, // Anti-threading ID
+        subject: `${subject} (LIVE DEMO) [${Math.floor(Math.random() * 10000)}]`, // Anti-threading ID
         transcript_html: wrappedBody,
         duration: "N/A",
         agent_name: agentName,
@@ -245,7 +245,7 @@ export const sendTranscriptEmail = async (
 
     const templateParams = {
         email: recipientEmail,
-        subject: `[TRANSCRIPT] ${persona.name} - ${new Date().toLocaleTimeString()} [ID:${uniqueId}]`,
+        subject: `[TRANSCRIPT] ${persona.name} - ${new Date().toLocaleTimeString()} (LIVE DEMO) [ID:${uniqueId}]`,
         transcript_html: htmlBody, 
         duration: Math.round(durationMs / 1000) + "s",
         agent_name: persona.name,
