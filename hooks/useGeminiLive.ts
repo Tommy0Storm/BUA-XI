@@ -19,6 +19,12 @@ import { WORKLET_CODE } from '../utils/workletCode';
 // Sanitize log messages to prevent injection
 const sanitizeLog = (str: string) => str.replace(/[\r\n]/g, ' ').slice(0, 200);
 
+// Extract URLs from text
+const extractLinks = (text: string): string[] => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return [...new Set((text.match(urlRegex) || []).map(url => url.replace(/[.,;!?)]+$/, '')))];
+};
+
 export interface UseGeminiLiveProps {
   apiKey?: string | undefined; // optional override
   persona: Persona;
@@ -151,6 +157,7 @@ export function useGeminiLive({
   const playedChunksRef = useRef<Set<string>>(new Set());
   const visionTopicsRef = useRef<Set<string>>(new Set());
   const lastVisionEmailRef = useRef<number>(0);
+  const searchResultsRef = useRef<Array<{query: string; tool: string; timestamp: number}>>([]);
 
   useEffect(() => {
     personaRef.current = persona;
@@ -362,8 +369,8 @@ export function useGeminiLive({
         userEmail || undefined
       );
       if (success) {
-        // transient UI ping
-        setTimeout(() => {}, 0);
+        setTranscriptSent(true);
+        setTimeout(() => setTranscriptSent(false), 5000); // Hide after 5 seconds
       }
     } else {
       dispatchLog('info', 'Session Ended', 'Duration < 20s. No transcript needed.');
@@ -814,6 +821,26 @@ export function useGeminiLive({
                   conversationHistoryRef.current.push({ role: 'model', text: modelText, timestamp: Date.now() });
                   setTranscript(modelText);
                   
+                  // Check if model response contains search results and send detailed email
+                  if (searchResultsRef.current.length > 0 && modelText.length > 100) {
+                    const recentSearches = searchResultsRef.current.filter(s => Date.now() - s.timestamp < 30000);
+                    if (recentSearches.length > 0) {
+                      const searchQuery = recentSearches[0].query;
+                      const toolName = recentSearches[0].tool;
+                      const links = extractLinks(modelText);
+                      await sendGenericEmail(
+                        userEmail || 'noreply@local',
+                        `${toolName} Results: ${searchQuery}`,
+                        modelText,
+                        personaRef.current.name,
+                        connectionIdRef.current || 'unknown',
+                        'standard',
+                        links
+                      );
+                      searchResultsRef.current = searchResultsRef.current.filter(s => !recentSearches.includes(s));
+                    }
+                  }
+                  
                   // Check if vision was active and model discussed visual topics
                   if (isVideoActive && modelText.length > 50) {
                     const now = Date.now();
@@ -831,7 +858,8 @@ export function useGeminiLive({
                               `${personaRef.current.name} analyzed your ${isVideoActive ? 'camera/screen' : 'visual input'}:\n\n${modelText}`,
                               personaRef.current.name,
                               connectionIdRef.current || 'unknown',
-                              'standard'
+                              'standard',
+                              []
                             );
                           }
                         });
@@ -854,7 +882,7 @@ export function useGeminiLive({
                 } else if (call.name === 'send_email') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `send_email argsKeys=${Object.keys(call.args || {}).join(',')}`);
                   const template = (call.args as any).template || 'standard';
-                  const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name, connectionIdRef.current || 'unknown', template);
+                  const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, (call.args as any).body, personaRef.current.name, connectionIdRef.current || 'unknown', template, []);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Sent' : 'Failed' } }] }));
                 } else if (call.name === 'query_lra_document') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
@@ -865,10 +893,8 @@ export function useGeminiLive({
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
                   const query = (call.args as any).query || (call.args as any).location || 'N/A';
                   dispatchLog('info', `${toolName} Tool`, `Query: ${query}`);
-                  const emailSubject = `${toolName} Results: ${query}`;
-                  const emailBody = `Your ${personaRef.current.name} agent performed a ${toolName} query:\n\nQuery: ${query}\n\nResults will be provided in the conversation.`;
-                  await sendGenericEmail(userEmail || 'noreply@local', emailSubject, emailBody, personaRef.current.name, connectionIdRef.current || 'unknown', 'standard');
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Emailed to user' } }] }));
+                  searchResultsRef.current.push({ query, tool: toolName, timestamp: Date.now() });
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Searching...' } }] }));
                 }
               }
             }
