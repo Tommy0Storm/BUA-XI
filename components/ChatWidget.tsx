@@ -299,7 +299,7 @@ export const ChatWidget: React.FC = () => {
             consoleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, 500);
-  }, [disconnect, setManualUserAction, status]);
+  }, [disconnect, setManualUserAction]);
 
   const toggleWidget = () => {
     if (isOpen) {
