@@ -799,7 +799,6 @@ ${userEmailContext}
 
 ${globalRules}`;
 
-      console.log('[SESSION DEBUG] About to call ai.live.connect...');
       const sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
@@ -814,8 +813,6 @@ ${globalRules}`;
         },
         callbacks: {
           onopen: () => {
-            console.log('[SESSION DEBUG] onopen callback fired!');
-            console.log('[SESSION DEBUG] connectionId check:', connectionIdRef.current, 'vs', myConnectionId);
             // Prevent any mic audio / interruptions for warmup period
             safeToSpeakRef.current = false;
             firstResponseReceivedRef.current = false;
@@ -866,7 +863,6 @@ ${globalRules}`;
             
             // Enable mic after brief warmup
             setTimeout(() => {
-              console.log('[MIC DEBUG] Enabling mic');
               safeToSpeakRef.current = true;
               firstResponseReceivedRef.current = true;
               dispatchLog('success', 'Ready', 'Mic active');
@@ -1038,10 +1034,7 @@ ${globalRules}`;
                   setDetectedLanguage((call.args as any).language);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'ok' } }] }));
                 } else if (call.name === 'send_email') {
-                  dispatchLog('info', '📧 EMAIL TOOL CALLED', `Args: ${JSON.stringify(call.args)}`);
-                  console.log('[EMAIL TOOL] Full args:', call.args);
-                  console.log('[EMAIL TOOL] User email:', userEmail);
-                  console.log('[EMAIL TOOL] Recipient:', (call.args as any).recipient_email);
+                  dispatchLog('info', '📧 EMAIL TOOL CALLED', `Sending to ${(call.args as any).recipient_email || userEmail}`);
                   try {
                     const template = (call.args as any).template || 'standard';
                     let body = (call.args as any).body || '';
@@ -1336,9 +1329,6 @@ ${globalRules}`;
             }
           },
           onclose: (e: any) => {
-            console.log('[ONCLOSE DEBUG] Fired! code:', e?.code, 'reason:', e?.reason, 'intentional:', isIntentionalDisconnectRef.current);
-            console.trace('[ONCLOSE DEBUG] Call stack');
-            dispatchLog('warn', 'DEBUG onclose', `code:${e?.code || 'n/a'} reason:${e?.reason || 'n/a'} intentional:${isIntentionalDisconnectRef.current}`);
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
               try { dispatchLog('info', 'DEBUG onclose', `code:${e?.code ?? 'n/a'} reason:${e?.reason ?? 'n/a'}`); } catch(e){}
@@ -1394,7 +1384,6 @@ ${globalRules}`;
             }
           },
           onerror: (err: any) => {
-            console.log('[SESSION DEBUG] onerror callback fired:', err);
             isConnectedRef.current = false;
             // Log error details and blacklist on auth errors
             const msg = String(err || '');
