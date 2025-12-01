@@ -1565,11 +1565,14 @@ ${globalRules}`;
             modelIsSpeakingRef.current = false;
             (async () => {
               try {
+                if (!isConnectedRef.current) return; // Guard before async operation
                 const session = await sessionPromise;
+                if (!isConnectedRef.current) return; // Guard after await
                 await session.sendRealtimeInput({ interruption: {} });
                 if (verbose) dispatchLog('info', 'Auto-Interrupt', 'User speaking - audio stopped');
               } catch (e) {
-                if (verbose) dispatchLog('warn', 'Interrupt Failed', String(e));
+                // Silently ignore if connection closed
+                if (isConnectedRef.current && verbose) dispatchLog('warn', 'Interrupt Failed', String(e));
               }
             })();
           }
@@ -1577,10 +1580,12 @@ ${globalRules}`;
         
         const blob = createPcmBlob(pcm, AUDIO_CONFIG.inputSampleRate);
         sessionPromise.then((session: any) => {
+          if (!isConnectedRef.current) return; // Guard: don't send if disconnected
           try {
             session.sendRealtimeInput({ media: blob });
           } catch (e) {
-            if (verbose) dispatchLog('warn', 'Audio Send Failed', String(e));
+            // Silently ignore WebSocket closed errors
+            if (isConnectedRef.current && verbose) dispatchLog('warn', 'Audio Send Failed', String(e));
           }
         }).catch(() => {});
       };
