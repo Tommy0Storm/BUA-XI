@@ -51,7 +51,7 @@ export function useGeminiLive({
   apiKey: overrideApiKey,
   persona,
   speechThreshold = 0.02, // slightly higher default to reduce false triggers
-  interruptionThreshold = 0.08, // RMS threshold for detecting user speech during model output
+  interruptionThreshold = 0.15, // RMS threshold - raised to reduce false interrupts from background noise
   userEmail,
   verboseLogging,
   enableVision: enableVisionProp,
@@ -1557,10 +1557,10 @@ ${globalRules}`;
         const pcm = e.data.data;
         const rms = e.data.rms;
         
-        // Auto-interrupt when user speaks (if enabled)
+        // Auto-interrupt when user speaks (if enabled) - requires sustained loud speech
         if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > interruptionThreshold) {
           const now = Date.now();
-          if (now - lastInterruptionTsRef.current > 800) {
+          if (now - lastInterruptionTsRef.current > 1200) { // 1.2s debounce to prevent over-interrupting
             lastInterruptionTsRef.current = now;
             activeSourcesRef.current.forEach(src => {
               try { src.stop(); src.disconnect(); } catch (e) {}
