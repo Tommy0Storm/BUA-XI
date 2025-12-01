@@ -978,8 +978,10 @@ export function useGeminiLive({
                   setDetectedLanguage((call.args as any).language);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'ok' } }] }));
                 } else if (call.name === 'send_email') {
-                  dispatchLog('info', '📧 EMAIL TOOL CALLED', `Args: ${Object.keys(call.args || {}).join(', ')}`);
+                  dispatchLog('info', '📧 EMAIL TOOL CALLED', `Args: ${JSON.stringify(call.args)}`);
                   console.log('[EMAIL TOOL] Full args:', call.args);
+                  console.log('[EMAIL TOOL] User email:', userEmail);
+                  console.log('[EMAIL TOOL] Recipient:', (call.args as any).recipient_email);
                   try {
                     const template = (call.args as any).template || 'standard';
                     let body = (call.args as any).body || '';
@@ -1064,22 +1066,32 @@ export function useGeminiLive({
                     
                     if (success) {
                       dispatchLog('success', 'Email Sent', `${finalBody.length} chars with full context`);
+                    } else {
+                      dispatchLog('error', 'Email Failed', 'sendGenericEmail returned false');
                     }
                     
-                    sessionPromise.then((s: any) => s.sendToolResponse({ 
+                    // Use await to ensure tool response is sent
+                    const session = await sessionPromise;
+                    await session.sendToolResponse({ 
                       functionResponses: [{ 
                         id: call.id, 
                         name: call.name, 
                         response: { 
                           result: success 
                             ? `Email sent successfully with ${emailParts.length} sections of information` 
-                            : 'Email failed to send' 
+                            : 'Email failed to send - check EmailJS configuration' 
                         } 
                       }] 
-                    }));
+                    });
                   } catch (e) {
                     dispatchLog('error', 'Email Tool Error', String(e));
-                    sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Error sending email' } }] }));
+                    console.error('[EMAIL TOOL] Exception:', e);
+                    try {
+                      const session = await sessionPromise;
+                      await session.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Error sending email: ${String(e)}` } }] });
+                    } catch (respErr) {
+                      console.error('[EMAIL TOOL] Failed to send error response:', respErr);
+                    }
                   }
                 } else if (call.name === 'query_lra_document') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `query_lra_document query=${(call.args as any).query}`);
@@ -1372,7 +1384,7 @@ export function useGeminiLive({
         // Auto-interrupt when user speaks (if enabled) - higher threshold to avoid background noise
         if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.15) {
           const now = Date.now();
-          if (now - lastInterruptionTsRef.current > 1500) {
+          if (now - lastInterruptionTsRef.current > 800) {
             lastInterruptionTsRef.current = now;
             // Stop all active audio sources immediately
             activeSourcesRef.current.forEach(src => {
@@ -1381,13 +1393,16 @@ export function useGeminiLive({
             activeSourcesRef.current.clear();
             nextStartTimeRef.current = outputCtx.currentTime;
             modelIsSpeakingRef.current = false;
-            // Send interruption signal to API
-            sessionPromise.then((session: any) => {
+            // Send interruption signal to API (await for stability)
+            (async () => {
               try {
-                session.sendRealtimeInput({ interruption: {} });
+                const session = await sessionPromise;
+                await session.sendRealtimeInput({ interruption: {} });
                 if (verbose) dispatchLog('info', 'Auto-Interrupt', 'User speaking - audio stopped');
-              } catch (e) {}
-            }).catch(() => {});
+              } catch (e) {
+                if (verbose) dispatchLog('warn', 'Interrupt Failed', String(e));
+              }
+            })();
           }
         }
         
