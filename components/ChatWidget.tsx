@@ -270,6 +270,12 @@ export const ChatWidget: React.FC = () => {
 
   // Handle Smooth Closing and Auto-Scroll to Console
   const handleDisconnect = useCallback((force = false) => {
+    // Prevent disconnect spam during renders - only disconnect if actually connected/connecting
+    if (status !== 'connected' && status !== 'connecting') {
+      console.log('[DISCONNECT] Blocked - not connected. Status:', status);
+      return;
+    }
+    
     // Log the call stack to identify what's triggering disconnects (sanitized)
     console.error('[DISCONNECT TRACE]', sanitizeString(new Error().stack || ''));
     console.log('[DISCONNECT] Force:', force, 'Status:', status);
