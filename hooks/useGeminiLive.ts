@@ -575,20 +575,28 @@ export function useGeminiLive({
       isIntentionalDisconnectRef.current = false;
       retryCountRef.current = isRetry ? retryCountRef.current + 1 : 0;
 
-      // Create audio contexts
+      // Create audio contexts - ensure old ones are closed first
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+      
+      // Close old input context if exists
+      if (inputContextRef.current && inputContextRef.current.state !== 'closed') {
+        try {
+          await inputContextRef.current.close();
+        } catch (e) {}
+      }
+      
       const inputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.inputSampleRate });
       const outputCtx = getOutputContext();
 
       if (connectionIdRef.current !== myConnectionId) return;
 
-      audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
+      audioContextRef.current = outputCtx;
 
       // Resume contexts AFTER assignment
       try {
-        await outputCtx.resume();
         await inputCtx.resume();
+        await outputCtx.resume();
         dispatchLog('success', 'Audio Unlocked', 'Ready');
       } catch (e) {
         dispatchLog('warn', 'Audio', 'Context resume pending');
