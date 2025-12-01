@@ -114,6 +114,11 @@ const ControlBtn: React.FC<ControlBtnProps> = ({
 
 // --- MAIN WIDGET COMPONENT ---
 
+// Track page/component load time for HMR protection
+if (!(window as any).__pageLoadTime) {
+  (window as any).__pageLoadTime = Date.now();
+}
+
 export const ChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -279,9 +284,17 @@ export const ChatWidget: React.FC = () => {
       return;
     }
     
+    // GUARD: Don't allow disconnect within 2 seconds of page load (prevents HMR ghost clicks)
+    const pageLoadTime = (window as any).__pageLoadTime || Date.now();
+    if (Date.now() - pageLoadTime < 2000) {
+      console.warn('[DISCONNECT] Blocked - too soon after page load (HMR protection)');
+      return;
+    }
+    
     // Set flag to prevent re-entry
     isDisconnectingRef.current = true;
     console.log('[DISCONNECT] Force:', force, 'Status:', status);
+    console.trace('[DISCONNECT] Call stack');
     
     // Only call disconnect if actually connected/connecting
     if (status === 'connected' || status === 'connecting') {

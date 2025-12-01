@@ -338,30 +338,45 @@ export function useGeminiLive({
       const loop = async () => {
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
-        if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-          canvas.width = videoRef.current!.videoWidth;
-          canvas.height = videoRef.current!.videoHeight;
-          ctx.drawImage(videoRef.current!, 0, 0);
+        
+        try {
+          if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            ctx.drawImage(videoRef.current, 0, 0);
 
-          if (enableVisionRef.current && isConnectedRef.current) {
-            // Use toBlob with callback - sends Blob directly (more efficient than base64)
-            canvas.toBlob((blob) => {
-              if (!blob || !isConnectedRef.current) return;
-              sessionRef.current!.then((session: any) => {
-                if (!isConnectedRef.current) return; // Guard before send
+            if (enableVisionRef.current && isConnectedRef.current) {
+              // Use promise-based toBlob for proper async handling (like Colab reference)
+              const blob = await new Promise<Blob | null>((resolve) =>
+                canvas.toBlob(resolve, 'image/jpeg', 0.6)
+              );
+              
+              if (blob && isConnectedRef.current && sessionRef.current) {
                 try {
-                  session.sendRealtimeInput({ media: blob });
-                  if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
-                } catch (e) {
-                  if (verbose) dispatchLog('warn', 'DEBUG vision', `Failed to send frame: ${String(e)}`);
+                  const session = await sessionRef.current;
+                  if (isConnectedRef.current) {
+                    await session.sendRealtimeInput({ media: blob });
+                    if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
+                  }
+                } catch (e: any) {
+                  // Only log if still connected (ignore errors during disconnect)
+                  if (isConnectedRef.current) {
+                    console.warn('[Vision] Send frame error:', e?.message || e);
+                  }
                 }
-              }).catch(() => {});
-            }, 'image/jpeg', 0.6); // 0.6 quality like Colab reference
-          } else if (verbose) {
-            dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
+              }
+            } else if (verbose) {
+              dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
+            }
           }
+        } catch (e: any) {
+          console.warn('[Vision] Frame loop error:', e?.message || e);
         }
-        frameIntervalRef.current = window.setTimeout(loop, 333);
+        
+        // Schedule next frame only if still connected
+        if (isConnectedRef.current && videoStreamRef.current) {
+          frameIntervalRef.current = window.setTimeout(loop, 333);
+        }
       };
       // start the loop
       frameIntervalRef.current = window.setTimeout(loop, 333);
