@@ -22,6 +22,60 @@ interface TranscriptEntry {
     timestamp: number;
 }
 
+// Generate a brief summary from conversation history
+const generateConversationSummary = (history: TranscriptEntry[], persona: Persona): string => {
+    if (history.length === 0) return 'No conversation recorded.';
+    
+    const userMessages = history.filter(e => e.role === 'user').map(e => e.text);
+    const modelMessages = history.filter(e => e.role === 'model').map(e => e.text);
+    
+    // Extract key topics from user messages
+    const topics: string[] = [];
+    const keywords = ['help', 'how', 'what', 'where', 'when', 'why', 'can you', 'please', 'need', 'want', 'looking for', 'question', 'problem', 'issue', 'legal', 'law', 'dismiss', 'work', 'employ', 'contract', 'rights', 'ccma', 'lra'];
+    
+    userMessages.forEach(msg => {
+        const lowerMsg = msg.toLowerCase();
+        keywords.forEach(kw => {
+            if (lowerMsg.includes(kw)) {
+                // Extract a snippet around the keyword
+                const idx = lowerMsg.indexOf(kw);
+                const start = Math.max(0, idx - 10);
+                const end = Math.min(msg.length, idx + kw.length + 40);
+                const snippet = msg.substring(start, end).trim();
+                if (snippet.length > 10 && !topics.some(t => t.includes(snippet.substring(0, 20)))) {
+                    topics.push(snippet);
+                }
+            }
+        });
+    });
+    
+    // Build summary
+    const summaryParts: string[] = [];
+    summaryParts.push(`<strong>Agent:</strong> ${sanitizeHtml(persona.name)} (${sanitizeHtml(persona.role)})`);
+    summaryParts.push(`<strong>Total Exchanges:</strong> ${userMessages.length} user messages, ${modelMessages.length} agent responses`);
+    
+    if (topics.length > 0) {
+        summaryParts.push(`<strong>Topics Discussed:</strong>`);
+        topics.slice(0, 5).forEach((topic, i) => {
+            summaryParts.push(`&nbsp;&nbsp;${i + 1}. "${sanitizeHtml(topic.substring(0, 80))}${topic.length > 80 ? '...' : ''}"`);
+        });
+    }
+    
+    // Add first user question if available
+    if (userMessages.length > 0) {
+        const firstQuestion = userMessages[0].substring(0, 150);
+        summaryParts.push(`<strong>Opening Query:</strong> "${sanitizeHtml(firstQuestion)}${userMessages[0].length > 150 ? '...' : ''}"`);
+    }
+    
+    // Add last model response snippet
+    if (modelMessages.length > 0) {
+        const lastResponse = modelMessages[modelMessages.length - 1].substring(0, 200);
+        summaryParts.push(`<strong>Final Response:</strong> "${sanitizeHtml(lastResponse)}${modelMessages[modelMessages.length - 1].length > 200 ? '...' : ''}"`);
+    }
+    
+    return summaryParts.join('<br/>');
+};
+
 const generateEmailHtml = (
     history: TranscriptEntry[], 
     durationSeconds: number, 
@@ -30,6 +84,9 @@ const generateEmailHtml = (
 ): string => {
     const now = new Date();
     const date = now.toLocaleString('en-ZA', { dateStyle: 'full', timeStyle: 'long' });
+    
+    // Generate conversation summary
+    const summary = generateConversationSummary(history, persona);
     
     const transcriptRows = history.map(entry => {
         const time = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
@@ -61,6 +118,15 @@ const generateEmailHtml = (
                 <p style="font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px;">Neural Engine Interaction Log</p>
                 <span style="display: inline-block; padding: 4px 8px; border: 1px solid #fff; font-size: 10px; margin-top: 10px;">CONFIDENTIAL</span>
             </div>
+            
+            <!-- CONVERSATION SUMMARY -->
+            <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid #667eea; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
+                <h2 style="color: #667eea; font-size: 14px; letter-spacing: 2px; margin: 0 0 15px 0; text-transform: uppercase;">📋 CONVERSATION SUMMARY</h2>
+                <div style="color: #e0e0e0; font-size: 14px; line-height: 1.8;">
+                    ${summary}
+                </div>
+            </div>
+            
             <div style="background-color: #050505; border: 1px solid #222; padding: 20px; margin-bottom: 40px;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
@@ -214,10 +280,15 @@ export const sendTranscriptEmail = async (
     userEmail?: string
 ): Promise<boolean> => {
     
-    dispatchLog('action', 'Generating Transcript Bundle...');
+    // Log session end
+    dispatchLog('action', '🔚 SESSION ENDED', `Duration: ${Math.round(durationMs / 1000)}s | Messages: ${history.length}`);
+    await new Promise(r => setTimeout(r, 300));
     
-    // Simulate processing time for theatrical effect
-    await new Promise(r => setTimeout(r, 600));
+    dispatchLog('action', '📝 Generating Conversation Summary...', `Analyzing ${history.filter(h => h.role === 'user').length} user messages`);
+    await new Promise(r => setTimeout(r, 500));
+    
+    dispatchLog('action', '📦 Building Transcript Bundle...', 'Compiling full chat history with timestamps');
+    await new Promise(r => setTimeout(r, 400));
     
     const htmlBody = generateEmailHtml(history, durationMs / 1000, persona, sessionId);
 
@@ -243,14 +314,21 @@ export const sendTranscriptEmail = async (
         session_id: sessionId
     };
 
-    dispatchLog('action', 'Initializing SMTP Handshake...', 'Connecting to relay via TLS 1.3');
-    await new Promise(r => setTimeout(r, 800)); // Theatrical delay
-    dispatchLog('info', 'Authenticating...', 'Verifying Service Signature');
+    dispatchLog('action', '📡 Initializing SMTP Handshake...', 'Connecting to secure relay via TLS 1.3');
+    await new Promise(r => setTimeout(r, 600));
+    
+    dispatchLog('info', '🔐 Authenticating...', 'Verifying EmailJS service signature');
+    await new Promise(r => setTimeout(r, 400));
+    
+    dispatchLog('action', '📤 Transmitting Transcript...', `Recipient: ${recipientEmail}`);
 
     try {
         emailjs.init(publicKey);
         await emailjs.send(serviceId, templateId, templateParams, publicKey);
-        dispatchLog('success', 'Transcript Emailed Successfully', `Recipient: ${recipientEmail}`);
+        
+        await new Promise(r => setTimeout(r, 300));
+        dispatchLog('success', '✅ TRANSCRIPT DELIVERED', `Full conversation sent to: ${recipientEmail}`);
+        dispatchLog('info', '📊 Email Contents', `Summary + ${history.length} messages | Session: ${sessionId.substring(0, 12)}...`);
         return true;
     } catch (error: any) {
         const errorMsg = error?.text || error?.message || JSON.stringify(error);
