@@ -332,8 +332,8 @@ export function useGeminiLive({
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // Setup a controlled camera loop that runs at 4 FPS (250ms) for responsive vision
-      // while avoiding excessive CPU / network load (rAF at 60fps is overkill)
+      // Setup a controlled camera loop that runs at 3 FPS (~333ms) - balanced for smooth vision
+      // without excessive CPU / network load (rAF at 60fps is overkill, 2fps was clunky)
       const loop = async () => {
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
@@ -357,10 +357,10 @@ export function useGeminiLive({
               dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
             }
         }
-        frameIntervalRef.current = window.setTimeout(loop, 250);
+        frameIntervalRef.current = window.setTimeout(loop, 333);
       };
       // start the loop
-      frameIntervalRef.current = window.setTimeout(loop, 250);
+      frameIntervalRef.current = window.setTimeout(loop, 333);
       
     } catch (err: any) {
       dispatchLog('error', 'Camera Access Denied', err.message || String(err));
