@@ -797,7 +797,14 @@ export const ChatWidget: React.FC = () => {
 
                         {/* Action Button */}
                         <button
-                            onClick={() => scheduleHeavy(() => connect())}
+                            onClick={() => {
+                                console.log('[BUTTON] START clicked, email valid:', isEmailValid);
+                                console.log('[BUTTON] connect function:', typeof connect);
+                                scheduleHeavy(() => {
+                                    console.log('[BUTTON] About to call connect()');
+                                    connect();
+                                });
+                            }}
                             disabled={!isEmailValid}
                             title={isEmailValid ? 'Will request: Location, Microphone permissions' : 'Enter valid email first'}
                             className={`w-full sm:w-auto px-8 py-2 rounded-xl shadow-xl transition-all transform flex items-center justify-center gap-3 group whitespace-nowrap font-bold text-sm
