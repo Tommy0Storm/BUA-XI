@@ -533,10 +533,17 @@ export function useGeminiLive({
 
     dispatchLog('warn', 'DEBUG disconnect', `Called with error: ${errorMessage || 'none'} force: ${force}`);
     console.trace('disconnect() call stack');
-    await dispatchTranscript();
-
-    isIntentionalDisconnectRef.current = true;
+    
+    // CRITICAL: Immediately stop worklet from sending more audio to prevent
+    // "WebSocket is already in CLOSING or CLOSED state" errors
     isConnectedRef.current = false;
+    isIntentionalDisconnectRef.current = true;
+    if (workletNodeRef.current?.port) {
+      workletNodeRef.current.port.onmessage = null;
+    }
+    
+    // Now safe to dispatch transcript (worklet won't spam WebSocket)
+    await dispatchTranscript();
 
     if (sessionRef.current) {
       try {
@@ -915,20 +922,22 @@ ${globalRules}`;
             
             // Start heartbeat to prevent idle closure
             const heartbeatInterval = setInterval(() => {
-              if (isConnectedRef.current) {
-                sessionPromise.then((session: any) => {
-                  try {
-                    const silentData = new Float32Array(160); // 10ms silence
-                    const pcmBlob = createPcmBlob(silentData, AUDIO_CONFIG.inputSampleRate);
-                    session.sendRealtimeInput({ media: pcmBlob });
-                    if (verbose) dispatchLog('info', 'DEBUG heartbeat', 'Sent');
-                  } catch (e) {
-                    if (verbose) dispatchLog('warn', 'Heartbeat Failed', String(e));
-                  }
-                }).catch(() => {});
-              } else {
+              if (!isConnectedRef.current) {
                 clearInterval(heartbeatInterval);
+                return;
               }
+              sessionPromise.then((session: any) => {
+                // Double-check connection state after promise resolves
+                if (!isConnectedRef.current) return;
+                try {
+                  const silentData = new Float32Array(160); // 10ms silence
+                  const pcmBlob = createPcmBlob(silentData, AUDIO_CONFIG.inputSampleRate);
+                  session.sendRealtimeInput({ media: pcmBlob });
+                  if (verbose) dispatchLog('info', 'DEBUG heartbeat', 'Sent');
+                } catch (e) {
+                  // Silently ignore if connection closed
+                }
+              }).catch(() => {});
             }, 10000); // every 10 seconds
 
             // Start demo timer
