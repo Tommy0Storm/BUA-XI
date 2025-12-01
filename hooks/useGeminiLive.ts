@@ -1102,7 +1102,7 @@ ${globalRules}`;
                       emailParts.push(`\n📌 YOUR LOCATION\nLatitude: ${userLocationRef.current.latitude.toFixed(4)}\nLongitude: ${userLocationRef.current.longitude.toFixed(4)}\n`);
                     }
                     
-                    // 6. Build final comprehensive body with proper HTML formatting
+                    // 7. Build final comprehensive body with proper HTML formatting
                     let finalBody = emailParts.length > 0 
                       ? emailParts.join('\n')
                       : 'Information from your conversation with VCB-AI.';
@@ -1197,15 +1197,19 @@ ${globalRules}`;
                   const phone = (call.args as any).phone_number;
                   const name = (call.args as any).contact_name || phone;
                   window.location.href = `tel:${phone}`;
-                  dispatchLog('success', 'Call Initiated', `Calling: ${name}`);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Call initiated' } }] }));
+                  dispatchLog('success', 'Call Initiated', `Calling: ${name} (${phone})`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Phone dialer opened to call ${name} at ${phone}. The user can now tap to dial.` } }] }));
                 } else if (call.name === 'open_whatsapp') {
                   const phone = (call.args as any).phone_number;
-                  const message = (call.args as any).message ? `?text=${encodeURIComponent((call.args as any).message)}` : '';
-                  const whatsappUrl = `https://wa.me/${phone}${message}`;
+                  const message = (call.args as any).message || '';
+                  const messageParam = message ? `?text=${encodeURIComponent(message)}` : '';
+                  const whatsappUrl = `https://wa.me/${phone}${messageParam}`;
                   window.open(whatsappUrl, '_blank');
-                  dispatchLog('success', 'WhatsApp Opened', `Chat with: ${phone}`);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'WhatsApp opened' } }] }));
+                  dispatchLog('success', 'WhatsApp Opened', `Chat with: +${phone}`);
+                  const feedback = message 
+                    ? `WhatsApp opened to chat with +${phone}. Message pre-filled: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`
+                    : `WhatsApp opened to chat with +${phone}. User can now type their message.`;
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: feedback } }] }));
                 } else if (call.name === 'copy_to_clipboard') {
                   const text = (call.args as any).text;
                   navigator.clipboard.writeText(text).then(() => {
@@ -1238,15 +1242,18 @@ ${globalRules}`;
                   dispatchLog('success', 'SMS Opened', `Message ready to send`);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'SMS app opened' } }] }));
                 } else if (call.name === 'create_calendar_event') {
-                  const title = encodeURIComponent((call.args as any).title);
+                  const title = (call.args as any).title;
                   const date = (call.args as any).date;
                   const startTime = (call.args as any).start_time;
                   const endTime = (call.args as any).end_time || startTime;
-                  const details = encodeURIComponent((call.args as any).details || '');
-                  const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${date}T${startTime}00/${date}T${endTime}00&details=${details}`;
+                  const details = (call.args as any).details || '';
+                  const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${date}T${startTime}00/${date}T${endTime}00&details=${encodeURIComponent(details)}`;
                   window.open(calendarUrl, '_blank');
-                  dispatchLog('success', 'Calendar Opened', `Event: ${(call.args as any).title}`);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Calendar event created' } }] }));
+                  // Format date for user feedback
+                  const formattedDate = `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}`;
+                  const formattedTime = `${startTime.substring(0, 2)}:${startTime.substring(2)}`;
+                  dispatchLog('success', 'Calendar Opened', `Event: ${title} on ${formattedDate}`);
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Google Calendar opened with event "${title}" scheduled for ${formattedDate} at ${formattedTime}. User can review and save.` } }] }));
                 } else if (call.name === 'fetch_url_content') {
                   const url = (call.args as any).url;
                   const customInstruction = (call.args as any).custom_instruction || '';

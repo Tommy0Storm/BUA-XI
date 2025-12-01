@@ -66,12 +66,12 @@ const OPEN_MAPS_FUNC: FunctionDeclaration = {
 
 const MAKE_CALL_FUNC: FunctionDeclaration = {
   name: 'make_call',
-  description: 'Initiate a phone call. Use when user asks to call someone or a business.',
+  description: 'Initiate a phone call on the user\'s device. Use when user says "call", "phone", "ring", or asks to contact someone by voice. Opens the phone dialer with the number pre-filled.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      phone_number: { type: Type.STRING, description: 'Phone number with country code (e.g., +27123456789)' },
-      contact_name: { type: Type.STRING, description: 'Name of person/business being called' }
+      phone_number: { type: Type.STRING, description: 'Phone number with country code (e.g., +27123456789 for South Africa)' },
+      contact_name: { type: Type.STRING, description: 'Name of person/business being called (for confirmation message)' }
     },
     required: ['phone_number'],
   },
@@ -79,12 +79,12 @@ const MAKE_CALL_FUNC: FunctionDeclaration = {
 
 const OPEN_WHATSAPP_FUNC: FunctionDeclaration = {
   name: 'open_whatsapp',
-  description: 'Open WhatsApp chat with a contact. Use when user asks to WhatsApp someone or send a WhatsApp message.',
+  description: 'Open WhatsApp to send a message. Use when user says "WhatsApp", "send a WhatsApp", or "message on WhatsApp". Opens WhatsApp with chat and optional pre-filled message.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      phone_number: { type: Type.STRING, description: 'Phone number with country code (e.g., 27123456789, no + sign)' },
-      message: { type: Type.STRING, description: 'Pre-filled message text (optional)' }
+      phone_number: { type: Type.STRING, description: 'Phone number WITHOUT plus sign, with country code (e.g., 27123456789 for South Africa)' },
+      message: { type: Type.STRING, description: 'Pre-filled message text that user can edit before sending (optional)' }
     },
     required: ['phone_number'],
   },
@@ -104,12 +104,12 @@ const COPY_TO_CLIPBOARD_FUNC: FunctionDeclaration = {
 
 const SET_REMINDER_FUNC: FunctionDeclaration = {
   name: 'set_reminder',
-  description: 'Set a timed reminder notification. Use when user asks to be reminded about something.',
+  description: 'Set a browser notification reminder. Use when user says "remind me", "set a reminder", or "alert me in X minutes". Shows notification after specified time.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      message: { type: Type.STRING, description: 'Reminder message' },
-      minutes: { type: Type.NUMBER, description: 'Minutes from now to show reminder' }
+      message: { type: Type.STRING, description: 'The reminder message to display in the notification' },
+      minutes: { type: Type.NUMBER, description: 'Number of minutes from now to show the reminder (e.g., 5, 30, 60)' }
     },
     required: ['message', 'minutes'],
   },
@@ -130,15 +130,15 @@ const SEND_SMS_FUNC: FunctionDeclaration = {
 
 const CREATE_CALENDAR_EVENT_FUNC: FunctionDeclaration = {
   name: 'create_calendar_event',
-  description: 'Create a calendar event. Use when user asks to schedule, book, or add something to calendar.',
+  description: 'Create a Google Calendar event. Use when user says "schedule", "book", "add to calendar", or "create an event". Opens Google Calendar with event pre-filled.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: 'Event title' },
-      date: { type: Type.STRING, description: 'Date in YYYYMMDD format' },
-      start_time: { type: Type.STRING, description: 'Start time in HHmm format (e.g., 1430 for 2:30 PM)' },
-      end_time: { type: Type.STRING, description: 'End time in HHmm format' },
-      details: { type: Type.STRING, description: 'Event description (optional)' }
+      title: { type: Type.STRING, description: 'Event title/name' },
+      date: { type: Type.STRING, description: 'Date in YYYYMMDD format (e.g., 20251215 for December 15, 2025)' },
+      start_time: { type: Type.STRING, description: 'Start time in HHmm 24-hour format (e.g., 0900 for 9:00 AM, 1430 for 2:30 PM)' },
+      end_time: { type: Type.STRING, description: 'End time in HHmm 24-hour format (optional, defaults to start_time)' },
+      details: { type: Type.STRING, description: 'Event description or notes (optional)' }
     },
     required: ['title', 'date', 'start_time'],
   },

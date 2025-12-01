@@ -278,21 +278,17 @@ export const ChatWidget: React.FC = () => {
       return;
     }
     
-    // Prevent disconnect spam during renders - only disconnect if actually connected/connecting
-    if (status !== 'connected' && status !== 'connecting') {
-      console.log('[DISCONNECT] Blocked - not connected. Status:', status);
-      return;
-    }
-    
     // Set flag to prevent re-entry
     isDisconnectingRef.current = true;
     console.log('[DISCONNECT] Force:', force, 'Status:', status);
     
-    // mark manual action if user pressed the UI button
-    if (force) setManualUserAction(true);
-    disconnect(undefined, force);
+    // Only call disconnect if actually connected/connecting
+    if (status === 'connected' || status === 'connecting') {
+      if (force) setManualUserAction(true);
+      disconnect(undefined, force);
+    }
     
-    // 1. Start Close Animation
+    // 1. Start Close Animation (always close modal regardless of status)
     setIsClosing(true);
     
     // 2. Wait for animation, then hide widget and scroll
