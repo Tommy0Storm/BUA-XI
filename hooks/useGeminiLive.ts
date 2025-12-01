@@ -186,6 +186,10 @@ export function useGeminiLive({
 
   useEffect(() => {
     isMicMutedRef.current = isMicMuted;
+    // Sync mute state to worklet
+    if (workletNodeRef.current?.port) {
+      workletNodeRef.current.port.postMessage({ type: 'setMuted', value: isMicMuted });
+    }
   }, [isMicMuted]);
 
   useEffect(() => {
@@ -869,6 +873,10 @@ ${globalRules}`;
             setTimeout(() => {
               safeToSpeakRef.current = true;
               firstResponseReceivedRef.current = true;
+              // CRITICAL: Notify worklet that it's safe to send audio now
+              if (workletNodeRef.current?.port) {
+                workletNodeRef.current.port.postMessage({ type: 'setSafeToSpeak', value: true });
+              }
               dispatchLog('success', 'Ready', 'Mic active');
             }, 500);
 
@@ -1458,13 +1466,6 @@ ${globalRules}`;
         }).catch(() => {});
       };
       
-      // Update worklet state when safeToSpeak changes
-      const updateWorkletState = () => {
-        if (workletNode?.port) {
-          workletNode.port.postMessage({ type: 'setSafeToSpeak', value: safeToSpeakRef.current });
-          workletNode.port.postMessage({ type: 'setMuted', value: isMicMutedRef.current });
-        }
-      };
     } catch (err: any) {
       // If connect failed due to auth/instantiation, mark key and try next
       const msg = String(err?.message || err);
