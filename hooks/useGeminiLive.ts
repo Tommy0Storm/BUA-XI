@@ -1496,15 +1496,6 @@ ${globalRules}`;
     connectRef.current = connect;
   }, [connect]);
 
-  useEffect(() => {
-    return () => {
-      if ((import.meta as any).env.MODE === "production") {
-        disconnect(undefined, true);
-      }
-      // Skip logging in dev to reduce HMR noise
-    };
-  }, [disconnect]);
-
   // Minimal exported API
   return {
     status,
