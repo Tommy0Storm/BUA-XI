@@ -799,6 +799,7 @@ ${userEmailContext}
 
 ${globalRules}`;
 
+      console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
       const sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
@@ -1406,6 +1407,12 @@ ${globalRules}`;
       });
 
       sessionRef.current = sessionPromise;
+      
+      // Log if session promise rejects
+      sessionPromise.catch((err) => {
+        console.error('[SESSION] Promise rejected:', err);
+        dispatchLog('error', 'Session Failed', String(err));
+      });
 
       // Setup AudioWorklet message handler (RMS normalization done in worklet)
       workletNode.port.postMessage({ type: 'setSafeToSpeak', value: false });
