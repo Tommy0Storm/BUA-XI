@@ -273,8 +273,9 @@ export function useGeminiLive({
 
   // --- Video helpers (lightweight; avoid layout thrashing) ---
   const stopVideo = useCallback(() => {
+    // Cancel requestAnimationFrame instead of clearInterval
     if (frameIntervalRef.current) {
-      clearInterval(frameIntervalRef.current);
+      cancelAnimationFrame(frameIntervalRef.current);
       frameIntervalRef.current = null;
     }
     if (videoStreamRef.current) {
@@ -309,20 +310,44 @@ export function useGeminiLive({
       return;
     }
     try {
-      const stream = useScreenShare
-        ? await (navigator.mediaDevices as any).getDisplayMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 5 } }
-          })
-        : await navigator.mediaDevices.getUserMedia({
-            video: { 
-              width: { ideal: 640 }, 
-              height: { ideal: 480 }, 
-              frameRate: { ideal: 5 },
-              facingMode: facingMode
-            }
+      let stream: MediaStream;
+      
+      if (useScreenShare) {
+        stream = await (navigator.mediaDevices as any).getDisplayMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15 } },
+          audio: false  // CRITICAL: Don't request audio in video stream (mobile compatibility)
+        });
+      } else {
+        // Mobile-safe camera constraints with fallback
+        // CRITICAL: audio: false prevents conflict with existing mic stream on mobile
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const constraints: MediaStreamConstraints = {
+          video: {
+            width: { ideal: 640, max: 1280 },
+            height: { ideal: 480, max: 720 },
+            frameRate: { ideal: isMobile ? 10 : 15, max: 30 },  // Lower for mobile battery
+            facingMode: { ideal: facingMode }  // Use 'ideal' not exact for mobile fallback
+          },
+          audio: false  // CRITICAL: Never request audio here - we have separate mic stream
+        };
+        
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (constraintErr) {
+          // Fallback: try without facingMode constraint (some mobile devices fail with it)
+          dispatchLog('warn', 'Vision System', 'Camera constraint failed, trying fallback...');
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false
           });
+        }
+      }
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Mobile Safari requires playsinline attribute and muted for autoplay
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
         await videoRef.current.play();
       }
       videoStreamRef.current = stream;
@@ -331,11 +356,25 @@ export function useGeminiLive({
 
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+      
+      // Track animation frame ID for cleanup
+      let frameId: number | null = null;
+      let lastFrameTime = 0;
+      const targetFPS = 10;  // 10 FPS for vision - balanced for quality vs bandwidth
+      const frameInterval = 1000 / targetFPS;
 
-      // Setup a controlled camera loop that runs at 3 FPS (~333ms) - balanced for smooth vision
-      // without excessive CPU / network load (rAF at 60fps is overkill, 2fps was clunky)
-      // Sends Blob directly (like Colab reference) to reduce encoding overhead
-      const loop = async () => {
+      // Use requestAnimationFrame like Colab reference - more reliable on mobile than setTimeout
+      // Mobile browsers heavily throttle setTimeout but respect rAF better
+      const loop = async (timestamp: number) => {
+        // Throttle to target FPS
+        if (timestamp - lastFrameTime < frameInterval) {
+          if (isConnectedRef.current && videoStreamRef.current) {
+            frameId = requestAnimationFrame(loop);
+          }
+          return;
+        }
+        lastFrameTime = timestamp;
+        
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
         
@@ -373,19 +412,23 @@ export function useGeminiLive({
           console.warn('[Vision] Frame loop error:', e?.message || e);
         }
         
-        // Schedule next frame only if still connected
+        // Schedule next frame only if still connected (use requestAnimationFrame for mobile)
         if (isConnectedRef.current && videoStreamRef.current) {
-          frameIntervalRef.current = window.setTimeout(loop, 333);
+          frameId = requestAnimationFrame(loop);
         }
       };
-      // start the loop
-      frameIntervalRef.current = window.setTimeout(loop, 333);
+      
+      // Start the loop with requestAnimationFrame
+      frameId = requestAnimationFrame(loop);
+      
+      // Store cleanup function in ref (we'll use frameIntervalRef to store the frameId)
+      frameIntervalRef.current = frameId;
       
     } catch (err: any) {
       dispatchLog('error', 'Camera Access Denied', err.message || String(err));
       setIsVideoActive(false);
     }
-  }, [verbose]);
+  }, [verbose, facingMode]);
 
   const toggleVideo = useCallback((useScreenShare = false) => {
     if (isVideoActive) stopVideo();
