@@ -1,0 +1,656 @@
+Page 1:
+===
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+No. 53294 3
+
+GENERAL NOTICES . ALGEMENE KENNISGEWINGS
+
+DEPARTMENT OF EMPLOYMENT AND LABOUR NOTICE 3470 OF 2025 LABOUR RELATIONS ACT, 1995
+
+CODE OF PRACTICE: DISMISSAL
+
+Notice is hereby given that the Code of Good Practice: Dismissal is issued by the Minister of Employment and Labour after consideration by NEDLAC in terms of section 203(2A) of the Labour Relations Act, 1995 (Act No. 66 of 1995) to take effect on the date of publication of this Code. The publication of this Code repeals Schedule 8 Code of Good Practice on Dismissal; and the Code of Good Practice Based on Operational Requirements published in the Government Notice 1517 in Government Gazette 20254 of 16 July 1999.
+
+Image With Text:
+MA
+NOMAKHOSAZANA METH, MP MINISTER OF EMPLOYMENT AND LABOUR DATE: 22 August 2025
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 2:
+===
+
+4
+
+No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+Schedule 8 CODE OF GOOD PRACTICE: DISMISSAL
+
+| PART A - INTRODUCTION   |                                |   2 |
+|:------------------------|:-------------------------------|----:|
+| 1.                      | Purpose                        |   2 |
+| 2.                      | Interpretation                 |   2 |
+| 3.                      | Small businesses               |   2 |
+| PART B - DISMISSAL      |                                |   3 |
+| 4.                      | Dismissal.                     |   3 |
+| PART C - FAIR DISMISSAL |                                |   3 |
+| 5.                      | Fairness                       |   3 |
+| PART D - MISCONDUCT     |                                |   3 |
+| 6.                      | Disciplinary measures          |   3 |
+| 7.                      | Fair reason for misconduct     |   4 |
+|                         | dismissal.                     |     |
+| 8.                      | Guidelines for deciding a fair |   4 |
+|                         | sanction,                      |     |
+| 9.                      | The sanction of dismissal.     |   5 |
+| 10.                     | Consistency                    |   5 |
+| 11.                     | Fair procedure                 |   6 |
+| 12.                     | Dismissals and industrial      |   6 |
+|                         | action.                        |     |
+| 13.                     | Disciplinary records           |   8 |
+| PART E - PROBATION      |                                |   8 |
+| 14.                     | Requirement to serve           |   8 |
+|                         | probation.                     |     |
+| 15.                     | Purpose                        |   8 |
+| 16.                     | Period of Probation.           |   8 |
+| 17.                     | Reasonable guidance            |   9 |
+| 18.                     | Decision not to confirm        |   9 |
+|                         | appointment                    |     |
+| PART F - INCAPACITY     |                                |   9 |
+| 19.                     | Unsatisfactory performance     |   9 |
+|                         | after probation.               |     |
+| 20.                     | Guidelines in cases of         |   9 |
+|                         | dismissal for poor work        |     |
+|                         | performance                    |     |
+| 21.                     | Incapacity: Ill health, injury |  10 |
+|                         | and other forms of incapacity  |     |
+| PART G - OPERATIONAL    |                                |  11 |
+| REQUIREMENTS            |                                |     |
+| 22.                     | The nature of operational      |  11 |
+|                         | requirements                   |     |
+| 23.                     | Fair reason.                   |  12 |
+| 24.                     | Fair procedure                 |  12 |
+|                         | Consulting parties             |  12 |
+|                         | Consultation                   |  12 |
+|                         | Selection criteria             |  13 |
+|                         | Disclosure of information      |  13 |
+|                         | The period of consultation     |  13 |
+|                         | Severance                      |  14 |
+|                         | Re-employment                  |  14 |
+| ANNEXURE A - NOTICE OF  |                                |  15 |
+| POSSIBLE RETRENCHMENTS  |                                |     |
+
+1
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 3:
+===
+
+No. 53294 5
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+Part A - Introduction
+
+1. Purpose.
+
+This Code of Good Practice provides guidance to employers, employees, trade unions and persons applying the Code on how the legal obligations under the Act regarding dismissals for misconduct, incapacity and operational requirements apply to employers and employees.
+
+2. Interpretation.
+
+(1) This Code is intentionally general. Each case is unique, and departures from the norms established by this Code may be justified in proper circumstances. For example, the number of employees employed in an establishment may warrant a different approach.
+
+(2) The key principle in this Code is that employers and employees should treat one another with mutual respect. This Code places a premium on employment justice, the efficient operation of an employer's business and the expeditious resolution of disputes. While employees should be protected from unfair action, employers are entitled to satisfactory conduct and work performance from their employees.
+
+(3) This Code does not alter the rights and obligations created under a collective agreement.
+
+(4) To make matters easier to understand, this Code uses terms that are in common use even though they do not appear in the Act. For example, the term "retrenchment" is used instead of dismissal for operational requirements and where obvious from the context, "business" includes a trade, undertaking or service.
+
+3. Small businesses.
+
+(1) This Code should not be interpreted as requiring small businesses to comply with obligations that are not practical or feasible for their operation.
+
+(2) Any person determining the fairness of a dismissal should take into account, in addition to any other guidelines set out in this Code, the circumstances in which small businesses operate.
+
+(3) For example, small businesses cannot reasonably be expected to engage in time-consuming investigations or pre-dismissal processes while at the same time keeping the business going. It should also be borne in mind that small employers do not have human resource departments staffed by people with skills and experience in these matters.
+
+2
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 4:
+===
+
+6
+
+No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+Part B - Dismissal
+
+4. Dismissal.
+
+(1) The most common form of dismissal is when the employer terminates the employee's employment with or without notice.
+
+(2) There are a number of other kinds of dismissal listed in section 186 (1) of the Act which are not dealt with in this Code.
+
+Part C - Fair dismissal
+
+5. Fairness.
+
+(1) A dismissal is fair if it is for a fair reason and in accordance with a fair procedure.
+
+(2) The Act lists three grounds on which a dismissal may be fair. These are: the conduct of the employee, the capacity of the employee, and the employer's operational requirements.1
+
+(3) The Act provides that a dismissal is automatically unfair if the reason for the dismissal infringes the rights of employees and trade unions or if the reason is one of those listed in section 187. These reasons include participation in a protected strike, pregnancy or acts of discrimination.
+
+(4) In cases where the dismissal is not automatically unfair, the employer must show that the dismissal was for a fair reason and in accordance with a fair procedure.
+
+Part D - Misconduct
+
+6. Disciplinary measures.
+
+(1) The purpose of discipline is for employees to know and understand what standards are required of them, and to guide their behaviour.
+
+(2) The purpose of implementing disciplinary processes is corrective. They are primarily a means to correct an employee's behaviour through graduated disciplinary measures.2
+
+1 Operational requirements refer to the business reasons for retrenching an employee.
+
+2 Graduated disciplinary measures may, depending on the circumstances, include counselling, warnings, suspension and a final warning.
+
+3
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 5:
+===
+
+No. 53294 7
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+(3) The form and content of disciplinary rules and procedures may vary according to the size and nature of the employer's business. Smaller employers may adopt a less formal approach to discipline.
+
+(4) Disciplinary rules and procedures should be clear and made available to employees in a manner that is easily understood.
+
+(5) It is preferable for employers, especially medium and larger employers, to adopt written disciplinary rules and procedures to establish the standard of conduct required of their employees and to create certainty and consistency in the application of discipline.3
+
+(6) Formal procedures do not have to be invoked every time a rule is broken, or a standard is not met. Informal advice and correction is often the best and most effective way for an employer to deal with minor violations of work discipline. Repeated misconduct will warrant warnings, which themselves may be graded according to degrees of severity. More serious infringements or repeated misconduct may call for a final warning or dismissal.
+
+(7) The employer may depart from these rules and procedures if there is a justification for doing so.
+
+7. Fair reason for misconduct dismissal.
+
+(1) An employee may be dismissed for serious misconduct if the misconduct renders the continuation of the employment relationship intolerable.
+
+(2) Subject to the rule that each case should be judged on its merits, serious misconduct may be a single instance of misconduct or repeated misconduct where graduated disciplinary measures have been implemented.
+
+8. Guidelines for deciding a fair sanction.
+
+Any person who is deciding whether a sanction for misconduct is fair should consider-
+
+(1) whether the employee contravened a rule or standard regulating conduct in, or of relevance to, the workplace;
+
+(2) if a rule or standard was contravened-
+
+3 Other rules may still exist even if the employer has adopted written disciplinary rules and procedures, and some rules or standards may be so well established and known that it is not necessary to communicate them.
+
+4
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 6:
+===
+
+8 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+(a) whether the rule was a valid and reasonable rule or standard;
+
+(b) whether the employee was aware, or could reasonably be expected to have been aware, of the rule or standard;
+
+(c) the importance of the rule or standard in the workplace;
+
+(d) the actual or potential harm or damage caused by the employee's contravention of the rule or standard;
+
+(e) whether the rule or standard has been consistently applied by the employer; and
+
+(f) whether dismissal is an appropriate sanction for the contravention of the rule or standard.
+
+9. The sanction of dismissal.
+
+Generally, dismissal is only an appropriate sanction if a continued employment relationship is intolerable. Factors to consider when determining this include -
+
+(1) the nature and requirements of the job;
+
+(2) the nature and seriousness of the misconduct and its effect on the business;
+
+(3) whether progressive discipline might prevent a recurrence of the misconduct;
+
+(4) any acknowledgement of wrongdoing by the employee and willingness to comply with the employer's rules and standards; and
+
+(5) the employee's circumstances (including length of service, disciplinary record and the effect of dismissal on the employee).
+
+10. Consistency.
+
+As a general rule, the employer should apply the sanction of dismissal in the same way in which it has been applied to other employees in the past4, and consistently as between two or more employees who participate in the misconduct under consideration.
+
+4 Consistency is a significant factor to be considered in assessing the fairness of a dismissal. However, inconsistency does not necessarily mean that the dismissal is unfair if the misconduct renders the continuation of the employment relationship intolerable.
+
+5
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 7:
+===
+
+No. 53294 9
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+11. Fair procedure.
+
+(1) The purpose of a fair procedure is to ensure a genuine dialogue and an opportunity for reflection before any decision is taken.
+
+(2) A fair procedure is one in which an employee has been given an adequate and reasonable opportunity to respond to the allegation of misconduct.
+
+(3) An investigation or enquiry does not have to be formal. Its nature should be appropriate to the circumstances, including the type of allegation and the nature and size of the employer.
+
+(4) Usually, before a decision is taken to dismiss, the employee should be -
+
+(a) notified of the allegations of misconduct, preferably in writing;
+
+(b) given an opportunity within a reasonable period of time to prepare and make representations on both the misconduct allegations and the appropriate sanction;
+
+(c) allowed the assistance of a fellow employee or trade union representative;
+
+(d) where reasonably possible, provided with the opportunity to converse in a language that the employee is comfortable with.
+
+(5) Allegations of misconduct should be made available or explained in sufficient detail to allow the employee to understand them.
+
+(6) In exceptional circumstances, if the employer cannot reasonably be expected to comply with these guidelines, the employer may dispense with some or all of them. It should, however, be recognised that the employer may be obliged to justify non-compliance if the employee refers a dispute about the procedural unfairness of the dismissal.
+
+(7) Discipline against a trade union representative or an employee who is an office-bearer or official of a trade union should not be instituted without first informing and consulting the trade union.
+
+12. Dismissals and industrial action.
+
+(1) Participation in a strike that does not comply with the provisions of chapter IV is misconduct. However, like any other act of misconduct, it does not always deserve dismissal. The substantive fairness of dismissal in these circumstances must be determined in the light of the facts of the case, including-
+
+(a) the seriousness of the contravention of this Act;
+
+6
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 8:
+===
+
+10 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+(b) attempts made to comply with the Act; and
+
+(c) whether the strike was in response to unlawful, unfair or unreasonable conduct by the employer.
+
+(2) Factors relevant to assessing the seriousness of the contravention include-
+
+(a) the conduct of the parties to the dispute related to the strike and the conduct by any other person that has a bearing on the seriousness of the contravention;
+
+(b) the legitimacy of the strikers' demands;
+
+(c) the duration and timing of the strike; and
+
+(d) the harm caused by the strike.
+
+(3) The process before dismissal should include the following-
+
+(a) The employer should, at the earliest opportunity, contact a trade union official to inform the trade union about the strike so as to afford the trade union an opportunity to consult with the striking employees.
+
+(b) The employer should consider representations by the official, and discuss the course of action it intends to adopt with the trade union.
+
+(c) If there is no trade union involved, the employer should seek to engage with leaders or representatives of the striking employees.
+
+(d) The employer should issue an ultimatum in clear and unambiguous terms that should state what is required of the employees and what sanction will be imposed if they do not comply with the ultimatum.
+
+(e) The employees should be allowed sufficient time to reflect on the ultimatum and respond to it, either by complying with it or rejecting it.
+
+(f) If an employer issues an ultimatum to employees engaged in an unprotected strike, it may not be fair to dismiss employees for participation in that strike who obey the ultimatum and return to work within the stipulated period.
+
+(g) If participating employees reject an ultimatum, the employer may dismiss the employees after considering the conduct and any
+
+7
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 9:
+===
+
+No. 53294 11
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+representations of the employees in accordance with the provisions of this Code.
+
+(h) In cases of collective misconduct, the employer may, depending on the circumstances, satisfy the requirements of procedural fairness by calling for collective representations.
+
+(i) If the employer cannot reasonably be expected to extend any of these steps to the employees in question, the employer may dispense with them.
+
+13. Disciplinary records.
+
+Employers should keep records for each employee specifying the nature of any disciplinary transgressions, the actions taken by the employer and the reasons for the actions.
+
+Part E - Probation
+
+14. Requirement to serve probation.
+
+An employer may require a newly hired employee to serve a period of probation before the employee's appointment is confirmed.
+
+15. Purpose.
+
+(1) The purpose of probation is to give the employer an opportunity to evaluate the employee's performance and suitability for employment before confirming the appointment.
+
+(2) Probation should not be used for purposes not contemplated by this Code, to deprive employees of the status of permanent employment. For example, a practice of dismissing employees at the end of their probation periods for reasons unrelated to their performance or suitability for employment and replacing them with newly hired employees is inconsistent with the purpose of probation and may constitute an unfair dismissal.
+
+16. Period of Probation.
+
+The period of probation should be determined in advance and be of a reasonable duration. The length of the probationary period should be determined with reference to the nature of the job and the time it takes to determine the employee's suitability for continued employment.
+
+8
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 10:
+===
+
+12 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+17. Reasonable guidance.
+
+During probation an employer should give an employee reasonable guidance, appropriate to the nature and size of the employer and the job, which may include instruction, training or counselling, in order to allow the employee an opportunity to render a satisfactory service.
+
+18. Decision not to confirm appointment.
+
+(1) An employer may only decide to dismiss an employee or extend the probationary period after the employer has given the employee the opportunity to make representations and the employer has considered any representations made.
+
+(2) Any person deciding about the fairness of a dismissal of an employee related to the employee's conduct or capacity, including poor work performance, during or on expiry of the probationary period, ought to accept, taking into account the purpose of probation, reasons for dismissal that may be less compelling than would be the case in dismissals effected after the completion of the probationary period.5
+
+Part F - Incapacity
+
+19. Unsatisfactory performance after probation.
+
+(1) After probation, an employee should not be dismissed for unsatisfactory performance unless-
+
+(a) the employer has given the employee appropriate evaluation, instruction, training, guidance or counselling; and
+
+(b) after a reasonable period of time for improvement, the employee continues to perform unsatisfactorily.
+
+(2) Before dismissing, the employer should give the employee an opportunity to respond to the allegations of unsatisfactory performance.
+
+20. Guidelines in cases of dismissal for poor work performance.
+
+(1) Any person determining whether a dismissal for poor work performance is unfair should consider-
+
+5 The courts have accepted this to be a clear indicator that arbitrators should be hesitant to interfere with the employer's decision on whether a probationary employee has attained the required performance standards or with the standards themselves.
+
+9
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 11:
+===
+
+No. 53294 13
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+(a) whether the employee failed to meet a performance standard; and
+
+(b) if the employee did not meet a required performance standard, whether-
+
+(i) the employee was aware, or could reasonably be expected to have been aware, of the required performance standard;
+
+(ii) the employee was given a fair opportunity to meet the required performance standard;
+
+(iii) the required performance standard was reasonably achievable; and
+
+(iv) dismissal was an appropriate sanction for not meeting the required performance standard.
+
+(2) Depending on the circumstances, an employer may not be required to warn an employee that if their performance does not improve they might be dismissed. This may be the case for managers and senior employees whose knowledge and experience enables them to judge whether their performance is adequate and employees with a high degree of professional skill where a departure from that high standard would have severe consequences justifying dismissal.
+
+21. Incapacity: Ill health, injury and other forms of incapacity
+
+(1) Incapacity on the grounds of physical or mental ill health or injury may be temporary or permanent. If an employee is temporarily unable to work in these circumstances, the employer should investigate the extent of the incapacity or the injury. If the employee is likely to be absent for a time that is unreasonably long in the circumstances, the employer should investigate all the possible alternatives short of dismissal. When alternatives are considered, relevant factors include the nature of the job, the period of absence, the seriousness of the illness or injury and the possibility of securing a temporary replacement for the ill or injured employee.
+
+(2) In cases of permanent incapacity, the employer should ascertain the possibility of securing alternative employment, or adapting the duties or work circumstances of the employee to accommodate the employee's disability.
+
+(3) In the process of the investigation referred to in sub-item (1), the employee should be allowed the opportunity to state a case in response and to be assisted by a trade union representative or fellow employee.
+
+10
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 12:
+===
+
+14 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+(4) The degree and cause of incapacity is relevant to the fairness of a dismissal on this ground. In the case of certain kinds of incapacity, for example alcoholism or drug abuse, counselling and rehabilitation may be appropriate steps for an employer to consider.
+
+(5) Particular consideration should be given to employees who are injured at work or who are incapacitated by a work-related illness. In these circumstances, the duty on the employer to accommodate the incapacity of the employee is more onerous.
+
+(6) Incapacity may be unrelated to ill health or injury, and may arise due to other factors preventing the employee from performing the applicable duties of the job, including imprisonment. Such incapacity may be temporary or permanent. The employer should assess the extent of the incapacity, and investigate all possible alternatives short of dismissal.
+
+(7) An employee's incompatibility, as manifested by an inability to work in harmony with an employer's business culture or with fellow employees, can constitute a form of incapacity which may justify dismissal.
+
+Part G - Operational Requirements
+
+22. The nature of operational requirements.
+
+(1) The Act defines a dismissal based on an employer's operational requirements as one that is based on the "economic, technological, structural or similar needs of the employer". This type of dismissal is commonly called a retrenchment.6
+
+(2) It is difficult to define all the circumstances that might legitimately form the basis for a retrenchment. As a general rule, economic reasons are those that relate to the financial state of the employer. Technological reasons refer to the introduction of new technology, which affects work relationships either by making existing jobs redundant or by requiring employees to adapt to the new technology, or a consequential restructuring of the workplace. Structural reasons relate to the redundancy of posts resulting from a restructuring of the employer's business.
+
+(3) Dismissals for operational requirements have been categorised as "no fault" dismissals. In other words, it is not the employee who is responsible for the termination of employment. Because retrenchment is a "no fault" dismissal and because of its human cost, the Act places particular obligations on an employer, most of which are directed toward ensuring
+
+6 To make things easier to understand, the term retrenchment is used to include all types of dismissals for operational requirements.
+
+11
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 13:
+===
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+No. 53294 15
+
+that all possible alternatives to dismissal are explored and that the employees to be dismissed are treated fairly.
+
+23. Fair reason.
+
+(1) To be fair, the reason for the retrenchment and the decision to select an employee for retrenchment must relate to the employer's operational requirements.
+
+(2) Dismissal must be a measure of last resort. It should only take place if it cannot be avoided by alternatives identified in the consultation process.
+
+(3) Employers must, of their own initiative, take appropriate steps to avoid retrenchments where reasonably possible.
+
+24. Fair procedure.
+
+Written notice
+
+(1) When an employer contemplates the possibility of retrenchments, it must initiate a process of consultation by giving a written notice.
+
+(2) The notice should be in the form of Annexure A. The notice must contain the relevant information available to the employer at that time.
+
+Consulting parties
+
+(3) The notice must be sent to those set out in section 189 (1) for the purpose of consultation.
+
+(4) Employers, including small employers, that have not concluded a collective agreement that applies to retrenchment consultations, should send the notice to a registered trade union whose members are likely to be affected by the proposed retrenchments, or if there is no such union, to each employee whom the employer proposes to retrench.7
+
+Consultation
+
+(5) The employer must then consult with a view to reaching consensus.
+
+(6) The employer must consult in good faith by keeping an open mind and seriously considering any proposals put forward by the union or employees.
+
+7 Employers covered by a bargaining council should ascertain whether there are council agreements that regulate retrenchment procedures.
+
+12
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 14:
+===
+
+16 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+(7) The consultations should cover -
+
+(a) the reasons why there is a need to retrench;
+
+(b) appropriate measures to -
+
+(i) avoid the retrenchments;
+
+(ii) minimise the number of retrenchments;
+
+(iii) change the timing of the retrenchments;
+
+(iv) mitigate the adverse effects of the retrenchments; and
+
+(c) if the employees are to be retrenched -
+
+(i) the method for selecting the employees to be retrenched; and
+
+(ii) the severance pay.
+
+Selection criteria
+
+(8) In the absence of an agreement between the consulting parties, the selection criteria must be fair and objective. Selection criteria that are generally accepted to be fair and objective include length of service, retention of skills or the qualifications of employees.
+
+(9) Irrespective of whether there is an agreement or not, selection based on union membership or activity, pregnancy or any other discriminatory ground can never be fair.
+
+Disclosure of information
+
+(10) To ensure meaningful engagements, the employer must disclose relevant information.
+
+(11) Section 189 (4)(a) of the Act, read with section 16, regulates disputes about the disclosure of relevant information.
+
+The period of consultation
+
+(12) The period taken for consultations and the number of consultation meetings is dependent on numerous factors, such as the complexity of the issues giving rise to the retrenchments, the nature and size of the employer and the scale of the retrenchments.
+
+13
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 15:
+===
+
+No. 53294 17
+
+STAATSKOERANT, 4 SEPTEMBER 2025
+
+(13) Simple retrenchments at a small employer can be done relatively quickly. Large and complex retrenchments will probably require more consultation meetings over a longer period of time.
+
+(14) If section 189A of the Act is applicable, the minimum period for consultations is 60 days; however, a consulting party may not unreasonably refuse to extend the period of consultation if such an extension is required to ensure meaningful consultation.
+
+Severance
+
+(15) The minimum amount of severance pay is prescribed in section 41 of the BCEA.
+
+Re-employment
+
+(16) Subject to the outcome of the consultation process, employees who are retrenched may be given preference if the employer again hires employees with comparable skills and qualifications.
+
+14
+
+This gazette is also available free online at www.gpwonline.co.za
+
+
+Page 16:
+===
+
+18 No. 53294
+
+GOVERNMENT GAZETTE, 4 SEPTEMBER 2025
+
+Annexure A - Notice of Possible Retrenchments
+
+A notice of possible retrenchments should address the following-
+
+|--:|:------------------------------|:-------------------------------|
+| 1 | Number and job categories of  | How many employees are likely  |
+|   | employees                     | to be affected and in what job |
+|   |                               | categories?8                   |
+| 2 | Reasons                       | What are the operational       |
+|   |                               | reasons for the proposed       |
+|   |                               | retrenchments?                 |
+| 3 | Alternatives                  | · What alternatives were       |
+|   |                               | considered? · If those         |
+|   |                               | alternatives have not been     |
+|   |                               | pursued, why not? · If any     |
+|   |                               | alternatives are offered, what |
+|   |                               | are they?                      |
+| 4 | Selection criteria            | What criteria are proposed for |
+|   |                               | selecting the employees for    |
+|   |                               | retrenchment?                  |
+| 5 | When the proposed             | At what time or during which   |
+|   | retrenchments will take place | period will the proposed       |
+|   |                               | retrenchments take place?      |
+| 6 | Severance pay                 | What is the proposed severance |
+|   |                               | pay to be paid?                |
+| 7 | Assistance                    | What assistance does the       |
+|   |                               | employer propose to offer to   |
+|   |                               | the retrenched employee?       |
+| 8 | Re-employment                 | . Is there any possibility of  |
+|   |                               | re-employment? · If so, who    |
+|   |                               | will be offered employment     |
+|   |                               | first, and what are the        |
+|   |                               | arrangements for keeping in    |
+|   |                               | contact?                       |
+| 9 | Employers with more than 50   | Employers which employ more    |
+|   | employees                     | than 50 employees must         |
+|   |                               | disclose the number of         |
+|   |                               | employees employed by the      |
+|   |                               | employer and the number of     |
+|   |                               | employees that the employer    |
+|   |                               | has retrenched in the          |
+|   |                               | preceding 12 months.9          |
+
+8 For larger employers, it would be useful to give the employee's full name, job title and company number.
+
+9 This information is necessary to determine whether section 189A of the Act applies.
+
+15
+
+This gazette is also available free online at www.gpwonline.co.za
