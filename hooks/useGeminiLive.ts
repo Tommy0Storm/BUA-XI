@@ -741,7 +741,11 @@ export function useGeminiLive({
     After providing search results, directions, or important information, ALWAYS proactively offer to email it by saying "Would you like me to email you these details?" or "I can send this to your email if you'd like." When user agrees, call the send_email tool immediately.
   </protocol>
   <protocol for="open_maps">
-    When a user asks for directions, call the open_maps tool immediately. Afterwards, confirm by saying "I've opened the map for you" and then offer to email the directions.
+    When a user asks for directions:
+    1. Use google_search to find the destination and get basic route info
+    2. Call open_maps tool to open the map
+    3. Verbally describe the route (e.g., "Head south on Main St for 2km, turn left on Oak Ave")
+    4. Offer to email the directions with the map link
   </protocol>
   <protocol for="query_lra_document">
     If the user asks a legal question related to dismissals or the LRA, state "Let me consult the LRA document for that" and immediately use the query_lra_document tool.
