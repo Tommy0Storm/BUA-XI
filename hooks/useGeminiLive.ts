@@ -332,8 +332,8 @@ export function useGeminiLive({
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
 
-      // Setup a controlled camera loop that runs at 2 FPS (500ms) to avoid choking real-time model
-      // using rAF here is too frequent and causes high CPU / network load for vision frames
+      // Setup a controlled camera loop that runs at 4 FPS (250ms) for responsive vision
+      // while avoiding excessive CPU / network load (rAF at 60fps is overkill)
       const loop = async () => {
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
@@ -342,9 +342,10 @@ export function useGeminiLive({
           canvas.height = videoRef.current!.videoHeight;
           ctx.drawImage(videoRef.current!, 0, 0);
 
-          if (enableVisionRef.current) {
+          if (enableVisionRef.current && isConnectedRef.current) {
             const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
             sessionRef.current!.then((session: any) => {
+              if (!isConnectedRef.current) return; // Guard before send
               try {
                 session.sendRealtimeInput({ media: { mimeType: 'image/jpeg', data: base64Data } });
                 if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
@@ -356,10 +357,10 @@ export function useGeminiLive({
               dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
             }
         }
-        frameIntervalRef.current = window.setTimeout(loop, 500);
+        frameIntervalRef.current = window.setTimeout(loop, 250);
       };
       // start the loop
-      frameIntervalRef.current = window.setTimeout(loop, 500);
+      frameIntervalRef.current = window.setTimeout(loop, 250);
       
     } catch (err: any) {
       dispatchLog('error', 'Camera Access Denied', err.message || String(err));
