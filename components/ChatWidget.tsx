@@ -368,10 +368,10 @@ export const ChatWidget: React.FC = () => {
   // Show stage if we are connected OR if we are latched (during closing animation)
   if ((status === 'connected' || status === 'connecting' || showStage) && isOpen) {
       return (
-        <div className={`fixed bottom-6 right-6 z-50 flex flex-col items-center origin-bottom-right font-sans transition-all duration-300 ease-in-out ${animationClass}`}>
+        <div className={`fixed inset-0 sm:bottom-6 sm:right-6 sm:inset-auto z-50 flex flex-col items-center sm:origin-bottom-right font-sans transition-all duration-300 ease-in-out ${animationClass}`}>
              
              {/* Main Container - The "Stage" */}
-             <div className="w-[16.8rem] h-[26.6rem] bg-[#09090b] rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col border border-white/10 ring-1 ring-black/50">
+             <div className="w-full h-full sm:w-[16.8rem] sm:h-[26.6rem] bg-[#09090b] sm:rounded-[2rem] shadow-[0_30px_60px_rgba(0,0,0,0.8)] overflow-hidden relative flex flex-col border-0 sm:border sm:border-white/10 sm:ring-1 sm:ring-black/50">
                 
                 {/* VIDEO ELEMENT BACKGROUND */}
                 <video 
@@ -387,7 +387,7 @@ export const ChatWidget: React.FC = () => {
                 <div className={`absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none transition-opacity duration-500 ${isVideoActive ? 'opacity-100' : 'opacity-0'}`}></div>
 
                 {/* 1. Voice Header */}
-                <div className="absolute top-0 left-0 right-0 p-6 z-20 flex justify-between items-center">
+                <div className="absolute top-0 left-0 right-0 p-4 sm:p-6 z-20 flex justify-between items-center safe-top">
                     <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5 shadow-sm pointer-events-none">
                         <div className={`w-2 h-2 rounded-full ${status === 'connecting' ? 'bg-yellow-400 animate-pulse' : 'bg-red-500 animate-pulse'}`}></div>
                         <span className={`text-xs font-mono font-medium tracking-wide ${isTimeLow ? 'text-red-400' : 'text-gray-300'}`}>
@@ -456,8 +456,8 @@ export const ChatWidget: React.FC = () => {
                 </div>
 
                 {/* 3. Voice Control Bar */}
-                <div className="fixed bottom-8 inset-x-0 flex justify-center z-30">
-                     <div className="flex items-center gap-2 px-3 py-2 bg-[#18181b] border border-white/10 rounded-full shadow-2xl">
+                <div className="absolute bottom-4 sm:bottom-8 inset-x-0 flex justify-center z-30 safe-bottom px-4">
+                     <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 bg-[#18181b] border border-white/10 rounded-full shadow-2xl">
                          
                          <ControlBtn 
                             active={!isMicMuted}
@@ -606,11 +606,11 @@ export const ChatWidget: React.FC = () => {
 
       {/* Modal */}
       {isOpen && !showStage && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none transition-all duration-300 ${isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 pointer-events-none transition-all duration-300 ${isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
           <div 
             ref={resizeRef}
             style={{ width: `${widgetSize.width}px`, height: `${widgetSize.height}px` }}
-            className="pointer-events-auto bg-[#FAFAFA] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border border-white/50"
+            className="pointer-events-auto bg-[#FAFAFA] sm:rounded-[2rem] shadow-2xl flex flex-col overflow-hidden relative border-0 sm:border sm:border-white/50 w-full h-full sm:w-auto sm:h-auto"
           >
             {/* Resize Handle */}
             <div 
@@ -620,18 +620,18 @@ export const ChatWidget: React.FC = () => {
                 document.body.style.cursor = 'nwse-resize';
                 document.body.style.userSelect = 'none';
               }}
-              className="absolute bottom-0 right-0 w-8 h-8 cursor-nwse-resize z-50 group"
+              className="hidden sm:block absolute bottom-0 right-0 w-8 h-8 cursor-nwse-resize z-50 group"
             >
               <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-gray-400 group-hover:border-gray-600 transition-colors"></div>
             </div>
             
-            <div className="bg-white border-b border-gray-100 p-6 flex justify-between items-start">
+            <div className="bg-white border-b border-gray-100 p-4 sm:p-6 flex justify-between items-start">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">System Online</span>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900">Select Agent</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Select Agent</h2>
                 </div>
                 <button 
                     onClick={toggleWidget}
@@ -656,8 +656,8 @@ export const ChatWidget: React.FC = () => {
                 </div>
             )}
 
-            <div className="flex-1 p-6 bg-gray-50/50 overflow-hidden flex flex-col">
-                <div className="grid grid-cols-3 gap-3 h-full" style={{ gridTemplateRows: `repeat(${Math.ceil(PERSONAS.length / 3)}, minmax(0, 1fr))` }}>
+            <div className="flex-1 p-3 sm:p-6 bg-gray-50/50 overflow-y-auto overscroll-contain flex flex-col">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 auto-rows-fr">
                     {PERSONAS.map(persona => {
                         const isSelected = selectedPersonaId === persona.id;
                         return (
@@ -667,19 +667,19 @@ export const ChatWidget: React.FC = () => {
                                 onClick={() => handlePersonaSelect(persona.id)}
                                 onMouseEnter={() => setHoveredPersona(persona.id)}
                                 onMouseLeave={() => setHoveredPersona(null)}
-                                className={`w-full h-full p-3 rounded-xl border transition-all duration-200 hover:scale-105 flex items-center gap-3
+                                className={`w-full h-full p-2.5 sm:p-3 rounded-xl border transition-all duration-200 active:scale-95 sm:hover:scale-105 flex flex-col sm:flex-row items-center gap-2 sm:gap-3 min-h-[100px] sm:min-h-0
                                     ${isSelected 
                                         ? 'bg-gradient-to-br from-gray-900 to-gray-800 border-gray-900 shadow-xl text-white' 
                                         : 'bg-white border-gray-200 hover:border-gray-400 hover:shadow-lg'
                                     }
                                 `}
                             >
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all
+                                <div className={`w-12 h-12 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all
                                     ${isSelected ? 'bg-white/10 text-white' : 'bg-gray-50 text-gray-600'}
                                 `}>
-                                    {getPersonaIcon(persona.icon, 20)}
+                                    {getPersonaIcon(persona.icon, 24)}
                                 </div>
-                                <div className="flex-1 text-left min-w-0">
+                                <div className="flex-1 text-center sm:text-left min-w-0">
                                     <h3 className={`font-bold text-xs truncate ${isSelected ? 'text-white' : 'text-gray-900'}`}>{persona.name}</h3>
                                     <p className={`text-[9px] font-medium uppercase tracking-wider truncate ${isSelected ? 'text-white/60' : 'text-gray-400'}`}>{persona.role}</p>
                                 </div>
@@ -693,9 +693,9 @@ export const ChatWidget: React.FC = () => {
                                 <div 
                                     role="button"
                                     onClick={(e) => playPreview(persona.id, persona.gender, e)}
-                                    className={`absolute bottom-1.5 right-1.5 p-1 rounded-full transition-all ${isSelected ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-900'}`}
+                                    className={`absolute bottom-1 right-1 sm:bottom-1.5 sm:right-1.5 p-1.5 sm:p-1 rounded-full transition-all ${isSelected ? 'bg-white/10 text-white active:bg-white/20' : 'bg-gray-100 text-gray-400 active:bg-gray-200 active:text-gray-900'}`}
                                 >
-                                    {playingPreview === persona.id ? <BarChart2 size={12} className="animate-pulse" /> : <Play size={12} />}
+                                    {playingPreview === persona.id ? <BarChart2 size={14} className="sm:w-3 sm:h-3 animate-pulse" /> : <Play size={14} className="sm:w-3 sm:h-3" />}
                                 </div>
                             </button>
                             </div>
@@ -811,82 +811,89 @@ export const ChatWidget: React.FC = () => {
       {showPermissionModal && (
         <>
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] animate-fade-in" onClick={handlePermissionDecline}></div>
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
-            <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl max-w-md w-full animate-scale-in border border-gray-200">
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center pointer-events-none">
+            <div className="pointer-events-auto bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl shadow-2xl animate-slide-up sm:animate-scale-in border-t sm:border border-gray-200 max-h-[90vh] sm:max-h-[85vh] flex flex-col">
+              {/* Mobile Drag Handle */}
+              <div className="sm:hidden flex justify-center pt-2 pb-1">
+                <div className="w-12 h-1 bg-gray-300 rounded-full"></div>
+              </div>
+
               {/* Header */}
-              <div className="bg-gradient-to-r from-green-600 via-yellow-500 to-red-600 p-6 rounded-t-2xl relative">
-                <div className="absolute top-3 right-3">
-                  <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full tracking-wider shadow-lg">DEMO</span>
+              <div className="bg-gradient-to-r from-green-600 via-yellow-500 to-red-600 p-4 sm:p-6 sm:rounded-t-2xl relative flex-shrink-0">
+                <div className="absolute top-2 sm:top-3 right-2 sm:right-3">
+                  <span className="bg-red-500 text-white text-[9px] sm:text-[10px] font-black px-2 sm:px-3 py-0.5 sm:py-1 rounded-full tracking-wider shadow-lg">DEMO</span>
                 </div>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/50">
-                    <AlertCircle size={24} className="text-white" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/50 flex-shrink-0">
+                    <AlertCircle size={20} className="sm:w-6 sm:h-6 text-white" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Permission Required</h3>
-                    <p className="text-white/80 text-xs font-medium">VCB PoLYGoN Live Demo</p>
+                  <div className="min-w-0">
+                    <h3 className="text-lg sm:text-xl font-bold text-white truncate">Permission Required</h3>
+                    <p className="text-white/80 text-[10px] sm:text-xs font-medium">VCB PoLYGoN Live Demo</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto overscroll-contain">
+                <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
+                  <p className="text-gray-700 text-xs sm:text-sm leading-relaxed">
+                    To provide you with the best demo experience, we need access to the following permissions:
+                  </p>
+
+                  <div className="space-y-2 sm:space-y-3">
+                    <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-blue-50 rounded-lg border border-blue-100 active:bg-blue-100 transition-colors">
+                      <Mic size={18} className="sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-gray-900">Microphone</div>
+                        <div className="text-[11px] sm:text-xs text-gray-600 leading-snug">Required for voice interaction with the AI agent</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-purple-50 rounded-lg border border-purple-100 active:bg-purple-100 transition-colors">
+                      <Video size={18} className="sm:w-5 sm:h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-gray-900">Camera <span className="text-[10px] text-purple-600">(Optional)</span></div>
+                        <div className="text-[11px] sm:text-xs text-gray-600 leading-snug">Enables visual context sharing when needed</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-emerald-50 rounded-lg border border-emerald-100 active:bg-emerald-100 transition-colors">
+                      <Globe size={18} className="sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-gray-900">Location</div>
+                        <div className="text-[11px] sm:text-xs text-gray-600 leading-snug">Provides location-aware assistance and local information</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 space-y-1.5 sm:space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={14} className="sm:w-4 sm:h-4 text-amber-600 flex-shrink-0" />
+                      <span className="font-bold text-xs sm:text-sm text-amber-900">Important Notice</span>
+                    </div>
+                    <ul className="text-[10px] sm:text-xs text-amber-800 space-y-0.5 sm:space-y-1 ml-5 sm:ml-6 list-disc leading-relaxed">
+                      <li>This is a <strong>DEMONSTRATION</strong> environment</li>
+                      <li>All information generated is for <strong>DEMO PURPOSES ONLY</strong></li>
+                      <li>We do <strong>NOT store</strong> your microphone, camera, or location data</li>
+                      <li>Permissions are used only during your active session</li>
+                      <li className="hidden sm:list-item">Do not rely on this demo for legal, financial, or medical advice</li>
+                    </ul>
                   </div>
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="p-6 space-y-4">
-                <p className="text-gray-700 text-sm leading-relaxed">
-                  To provide you with the best demo experience, we need access to the following permissions:
-                </p>
-
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <Mic size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-bold text-sm text-gray-900">Microphone</div>
-                      <div className="text-xs text-gray-600">Required for voice interaction with the AI agent</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
-                    <Video size={20} className="text-purple-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-bold text-sm text-gray-900">Camera (Optional)</div>
-                      <div className="text-xs text-gray-600">Enables visual context sharing when needed</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                    <Globe size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-bold text-sm text-gray-900">Location</div>
-                      <div className="text-xs text-gray-600">Provides location-aware assistance and local information</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle size={16} className="text-amber-600" />
-                    <span className="font-bold text-sm text-amber-900">Important Notice</span>
-                  </div>
-                  <ul className="text-xs text-amber-800 space-y-1 ml-6 list-disc">
-                    <li>This is a <strong>DEMONSTRATION</strong> environment</li>
-                    <li>All information generated is for <strong>DEMO PURPOSES ONLY</strong></li>
-                    <li>We do <strong>NOT store</strong> your microphone, camera, or location data</li>
-                    <li>Permissions are used only during your active session</li>
-                    <li>Do not rely on this demo for legal, financial, or medical advice</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-6 pt-0 flex gap-3">
+              {/* Sticky Footer */}
+              <div className="p-4 sm:p-6 pt-3 sm:pt-0 flex gap-2 sm:gap-3 border-t sm:border-t-0 border-gray-100 bg-white sm:bg-transparent flex-shrink-0">
                 <button
                   onClick={handlePermissionDecline}
-                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors"
+                  className="flex-1 px-4 py-3 sm:py-3 bg-gray-100 active:bg-gray-200 sm:hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors active:scale-[0.98]"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handlePermissionAccept}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-gray-900 to-gray-800 hover:from-black hover:to-gray-900 text-white rounded-xl font-bold text-sm transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 sm:py-3 bg-gradient-to-r from-gray-900 to-gray-800 active:from-black active:to-gray-900 sm:hover:from-black sm:hover:to-gray-900 text-white rounded-xl font-bold text-sm transition-all shadow-lg active:shadow-xl sm:hover:shadow-xl flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <CheckCircle2 size={16} />
                   I ACCEPT
@@ -899,19 +906,19 @@ export const ChatWidget: React.FC = () => {
 
       {/* Floating Trigger Button (Visible when closed) */}
       {!isOpen && !showPermissionModal && (
-        <div className={`fixed bottom-8 right-8 z-50 transition-all duration-300 ${isClosing ? 'translate-y-20 opacity-0' : 'translate-y-0 opacity-100'}`}>
+        <div className={`fixed bottom-4 right-4 sm:bottom-8 sm:right-8 z-50 transition-all duration-300 ${isClosing ? 'translate-y-20 opacity-0' : 'translate-y-0 opacity-100'}`}>
             <button
                 onClick={toggleWidget}
-                className="pl-6 pr-7 py-5 bg-gradient-to-r from-green-600 via-yellow-500 to-red-600 text-white rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.5)] hover:shadow-[0_25px_70px_rgba(0,0,0,0.6)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all group border-2 border-white/20 animate-pulse-slow"
+                className="pl-4 pr-5 py-3 sm:pl-6 sm:pr-7 sm:py-5 bg-gradient-to-r from-green-600 via-yellow-500 to-red-600 text-white rounded-full shadow-[0_20px_60px_rgba(0,0,0,0.5)] active:shadow-[0_25px_70px_rgba(0,0,0,0.6)] sm:hover:shadow-[0_25px_70px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-95 sm:hover:scale-110 transition-all group border-2 border-white/20"
             >
-                <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center mr-4 ring-2 ring-white/50">
-                     <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/30 flex items-center justify-center mr-2 sm:mr-4 ring-2 ring-white/50">
+                     <div className="w-2 h-2 sm:w-3 sm:h-3 bg-white rounded-full animate-pulse"></div>
                 </div>
-                <div className="flex flex-col items-start leading-none mr-3">
-                    <span className="text-[10px] font-bold text-white/80 uppercase tracking-wider mb-1">VCB PoLYGoN</span>
-                    <span className="text-lg font-extrabold">Try Live Demo</span>
+                <div className="flex flex-col items-start leading-none mr-2 sm:mr-3">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-white/80 uppercase tracking-wider mb-0.5 sm:mb-1">VCB PoLYGoN</span>
+                    <span className="text-base sm:text-lg font-extrabold">Try Live Demo</span>
                 </div>
-                <ChevronRight size={20} className="text-white/80 group-hover:text-white group-hover:translate-x-1 transition-transform" />
+                <ChevronRight size={18} className="sm:w-5 sm:h-5 text-white/80 group-active:text-white sm:group-hover:text-white sm:group-hover:translate-x-1 transition-transform" />
             </button>
         </div>
       )}
