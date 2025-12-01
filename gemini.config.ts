@@ -46,7 +46,7 @@ export function getApiKey(): string {
  */
 export const MODELS = {
   // Native audio model - supports actual audio output (use this for voice)
-  nativeAudio: 'gemini-2.5-flash-preview-native-audio-dialog',
+  nativeAudio: 'gemini-2.5-flash-native-audio-preview-09-2025',
 
   // Live preview model - faster but may not support audio output properly
   livePreview: 'gemini-live-2.5-flash-preview',
