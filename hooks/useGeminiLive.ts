@@ -334,6 +334,7 @@ export function useGeminiLive({
 
       // Setup a controlled camera loop that runs at 3 FPS (~333ms) - balanced for smooth vision
       // without excessive CPU / network load (rAF at 60fps is overkill, 2fps was clunky)
+      // Sends Blob directly (like Colab reference) to reduce encoding overhead
       const loop = async () => {
         if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
@@ -343,19 +344,22 @@ export function useGeminiLive({
           ctx.drawImage(videoRef.current!, 0, 0);
 
           if (enableVisionRef.current && isConnectedRef.current) {
-            const base64Data = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-            sessionRef.current!.then((session: any) => {
-              if (!isConnectedRef.current) return; // Guard before send
-              try {
-                session.sendRealtimeInput({ media: { mimeType: 'image/jpeg', data: base64Data } });
-                if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
-              } catch (e) {
-                if (verbose) dispatchLog('warn', 'DEBUG vision', `Failed to send frame: ${String(e)}`);
-              }
-            }).catch(() => {});
-            } else if (verbose) {
-              dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
-            }
+            // Use toBlob with callback - sends Blob directly (more efficient than base64)
+            canvas.toBlob((blob) => {
+              if (!blob || !isConnectedRef.current) return;
+              sessionRef.current!.then((session: any) => {
+                if (!isConnectedRef.current) return; // Guard before send
+                try {
+                  session.sendRealtimeInput({ media: blob });
+                  if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
+                } catch (e) {
+                  if (verbose) dispatchLog('warn', 'DEBUG vision', `Failed to send frame: ${String(e)}`);
+                }
+              }).catch(() => {});
+            }, 'image/jpeg', 0.6); // 0.6 quality like Colab reference
+          } else if (verbose) {
+            dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
+          }
         }
         frameIntervalRef.current = window.setTimeout(loop, 333);
       };
