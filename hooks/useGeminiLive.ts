@@ -159,6 +159,9 @@ export function useGeminiLive({
   const visionTopicsRef = useRef<Set<string>>(new Set());
   const lastVisionEmailRef = useRef<number>(0);
   const searchResultsRef = useRef<Array<{query: string; tool: string; timestamp: number}>>([]);
+  const lastMapsDestinationRef = useRef<{destination: string; mode: string; timestamp: number} | null>(null);
+  const conversationContextRef = useRef<{lastTopic: string; lastResponse: string; timestamp: number} | null>(null);
+  const fetchedUrlContentRef = useRef<{url: string; content: string; timestamp: number} | null>(null);
 
   useEffect(() => {
     personaRef.current = persona;
@@ -503,21 +506,28 @@ export function useGeminiLive({
       return;
     }
 
-    // Request location permission when user starts session
+    // Location must be resolved before connecting
     if (navigator.geolocation && !userLocationRef.current) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          userLocationRef.current = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          };
-          dispatchLog('success', 'Location', `Acquired: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`);
-        },
-        (error) => {
-          if (verbose) dispatchLog('warn', 'Location', `Denied or unavailable: ${error.message}`);
-        },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
-      );
+      dispatchLog('info', 'Location', 'Waiting for GPS...');
+      await new Promise<void>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            userLocationRef.current = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            };
+            dispatchLog('success', '📍 LOCATION LOCKED', `Lat: ${position.coords.latitude.toFixed(4)}, Lon: ${position.coords.longitude.toFixed(4)}`);
+            console.log('[LOCATION] User location captured:', userLocationRef.current);
+            resolve();
+          },
+          (error) => {
+            dispatchLog('warn', 'Location Denied', 'Continuing without location');
+            console.warn('[LOCATION] User denied location:', error);
+            resolve(); // Continue anyway
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
     }
 
     // stop any previous audio graph
@@ -532,6 +542,9 @@ export function useGeminiLive({
     try {
       const now = Date.now();
       const blacklisted = Object.entries(failedKeyMapRef.current).filter(([, ts]) => now - ts < KEY_BLACKLIST_MS).map(([k]) => k);
+      console.log('[KEY DEBUG] Total keys:', apiKeys.length);
+      console.log('[KEY DEBUG] Blacklisted count:', blacklisted.length);
+      console.log('[KEY DEBUG] Available keys:', apiKeys.length - blacklisted.length);
       if (verbose) dispatchLog('info','DEBUG keys', `blacklistedCount=${blacklisted.length}`);
     } catch(e) {}
 
@@ -545,6 +558,8 @@ export function useGeminiLive({
     const currentKey = apiKeys[nextIndex];
 
     // don't print keys; print only the number of keys (safe)
+    console.log('[KEY DEBUG] Selected key index:', nextIndex);
+    console.log('[KEY DEBUG] Key preview:', currentKey.substring(0, 20) + '...');
     dispatchLog('info', 'Connecting...', `Using key index ${nextIndex} of ${apiKeys.length}`);
 
     const myConnectionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -563,18 +578,22 @@ export function useGeminiLive({
       // Create audio contexts
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
       const inputCtx = new AudioContextClass({ sampleRate: AUDIO_CONFIG.inputSampleRate });
-      // Use the shared output context instead of creating a new one for each connect
       const outputCtx = getOutputContext();
-
-      await Promise.all([
-        outputCtx.resume().catch((e: any) => console.warn('Output Resume failed', e)),
-        inputCtx.resume().catch((e: any) => console.warn('Input Resume failed', e))
-      ]);
 
       if (connectionIdRef.current !== myConnectionId) return;
 
       audioContextRef.current = outputCtx;
       inputContextRef.current = inputCtx;
+
+      // Resume contexts AFTER assignment
+      try {
+        await outputCtx.resume();
+        await inputCtx.resume();
+        dispatchLog('success', 'Audio Unlocked', 'Ready');
+      } catch (e) {
+        dispatchLog('warn', 'Audio', 'Context resume pending');
+      }
+
       nextStartTimeRef.current = outputCtx.currentTime;
 
       // OUTPUT DSP
@@ -689,9 +708,21 @@ export function useGeminiLive({
       // If a modelOverride is provided, that takes precedence (used for fallbacks)
       // Always prefer runtime override, otherwise use the native audio preview model for live audio
       const chosenModel = modelOverride ?? forcedModelRef.current ?? MODELS.nativeAudio;
+      console.log('[MODEL DEBUG] Chosen model:', chosenModel);
+      console.log('[MODEL DEBUG] Vision enabled:', enableVisionRef.current);
       if (verbose) dispatchLog('info', 'DEBUG', `Using model: ${chosenModel} (vision:${enableVisionRef.current})`);
 
       const userEmailContext = userEmail ? `\n\nUSER EMAIL: ${userEmail}` : '';
+      const locationContext = userLocationRef.current 
+        ? `\n\n🌍 USER LOCATION (CRITICAL): The user is currently at GPS coordinates Latitude ${userLocationRef.current.latitude.toFixed(4)}, Longitude ${userLocationRef.current.longitude.toFixed(4)}. This is their EXACT physical location RIGHT NOW. NEVER ask "where are you?" or "what's your location?" - YOU ALREADY KNOW IT. Use these coordinates automatically for: directions (as starting point), nearby searches, distance calculations, and location-based recommendations. When giving directions, always say "from your current location" not "from where you are".`
+        : `\n\n⚠️ USER LOCATION: User denied location access. You must ask for their location/address when needed for directions or nearby searches.`;
+      const emailContext = `\n\n📧 EMAIL PROTOCOL: After providing search results, directions, or important information, ALWAYS proactively offer to email it. Say "Would you like me to email you these details?" or "I can send this to your email if you'd like." When user agrees, call the send_email tool immediately.`;
+      
+      // Log what we're sending to the AI
+      console.log('[SYSTEM INSTRUCTION] Location context:', locationContext.substring(0, 200));
+      console.log('[SYSTEM INSTRUCTION] Has location:', !!userLocationRef.current);
+      
+      console.log('[SESSION DEBUG] About to call ai.live.connect...');
       const sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
@@ -699,20 +730,23 @@ export function useGeminiLive({
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: personaRef.current.voiceName } }
           },
-          systemInstruction: systemInstructionToUse + userEmailContext + (userLocationRef.current ? `\n\nUSER LOCATION: Latitude ${userLocationRef.current.latitude}, Longitude ${userLocationRef.current.longitude}. Use this for location-based searches.` : ''),
+          systemInstruction: systemInstructionToUse + userEmailContext + locationContext + emailContext,
           temperature: personaRef.current.temperature ?? 0.7,
           tools: LIVE_API_TOOLS,
-          toolConfig: userLocationRef.current ? { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } } : undefined,
-          inputAudioTranscription: { model: 'default', languageCode: 'en-ZA' },
-          outputAudioTranscription: { model: 'default', languageCode: 'en-ZA' }
+          toolConfig: userLocationRef.current ? { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } } : undefined
         },
         callbacks: {
           onopen: () => {
+            console.log('[SESSION DEBUG] onopen callback fired!');
+            console.log('[SESSION DEBUG] connectionId check:', connectionIdRef.current, 'vs', myConnectionId);
             // Prevent any mic audio / interruptions for warmup period
             safeToSpeakRef.current = false;
             firstResponseReceivedRef.current = false;
             dispatchLog('info', 'DEBUG onopen', 'Gating audio for warmup');
-            if (connectionIdRef.current !== myConnectionId) return;
+            if (connectionIdRef.current !== myConnectionId) {
+              console.log('[SESSION DEBUG] connectionId mismatch - aborting onopen');
+              return;
+            }
             // record session open time so we can detect very-short lived sessions
             sessionOpenTimeRef.current = Date.now();
             dispatchLog('success', 'Neural Link Established', `Session ID: ${myConnectionId.substr(0, 12)}...`);
@@ -739,27 +773,8 @@ export function useGeminiLive({
               }
             }, 10000); // every 10 seconds
 
-            // Enable mic after short warmup
-            setTimeout(() => {
-              safeToSpeakRef.current = true;
-              firstResponseReceivedRef.current = true;
-              dispatchLog('success', 'Ready', 'Mic active - you can speak now');
-              
-              // Send initial context message for Dark Matter persona
-              if (personaRef.current.id === 'dark_matter' && userEmail) {
-                sessionPromise.then((session: any) => {
-                  try {
-                    session.send(`User email: ${userEmail}. System prompt active. Begin greeting.`);
-                    if (verbose) dispatchLog('info', 'Context Sent', 'Email and prompt sent to Dark Matter');
-                  } catch (e) {
-                    if (verbose) dispatchLog('warn', 'Context Failed', String(e));
-                  }
-                }).catch(() => {});
-              }
-            }, 1000);
-
             // Start demo timer
-            if (demoTimerRef.current) window.clearInterval(demoTimerRef.current);
+            if (demoTimerRef.current) clearInterval(demoTimerRef.current);
             const maxDuration = personaRef.current.maxDurationSeconds || 120;
             setTimeLeft(maxDuration);
             demoTimerRef.current = window.setInterval(() => {
@@ -771,13 +786,38 @@ export function useGeminiLive({
                 return prev - 1;
               });
             }, 1000);
+            
+            // Enable mic after brief warmup
+            setTimeout(() => {
+              console.log('[MIC DEBUG] Enabling mic');
+              safeToSpeakRef.current = true;
+              firstResponseReceivedRef.current = true;
+              dispatchLog('success', 'Ready', 'Mic active');
+            }, 500);
+
+            // Send greeting (non-blocking)
+            if (personaRef.current.initialGreeting) {
+              sessionPromise.then((session: any) => {
+                try {
+                  session.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text: personaRef.current.initialGreeting }] }],
+                    turnComplete: true
+                  });
+                  dispatchLog('success', 'Greeting Sent', personaRef.current.initialGreeting.substring(0, 30));
+                } catch (e) {
+                  dispatchLog('warn', 'Greeting Failed', String(e));
+                }
+              }).catch(() => {});
+            }
           },
           onmessage: async (msg: LiveServerMessage) => {
+            console.log('[SESSION DEBUG] onmessage fired:', msg);
             if (connectionIdRef.current !== myConnectionId) return;
             try {
 
             // Log what we're receiving
             const msgKeys = Object.keys(msg).join(', ');
+            console.log('[MESSAGE DEBUG] Message keys:', msgKeys);
             dispatchLog('info', 'Message Received', `Type: ${msgKeys}`);
             if (verbose) {
               dispatchLog('info', 'DEBUG msg', JSON.stringify(msg).substring(0, 500));
@@ -864,6 +904,7 @@ export function useGeminiLive({
               }
               if (serverContent.outputTranscription?.text) {
                 currentOutputTranscriptionRef.current += serverContent.outputTranscription.text;
+                setTranscript(currentOutputTranscriptionRef.current);
               }
               if (serverContent.inputTranscription?.text) {
                 currentInputTranscriptionRef.current += serverContent.inputTranscription.text;
@@ -874,25 +915,19 @@ export function useGeminiLive({
                 if (userText) conversationHistoryRef.current.push({ role: 'user', text: userText, timestamp: Date.now() });
                 if (modelText) {
                   conversationHistoryRef.current.push({ role: 'model', text: modelText, timestamp: Date.now() });
-                  setTranscript(modelText);
                   
-                  // Check if model response contains search results and send detailed email
+                  // Capture conversation context for smart email generation
+                  conversationContextRef.current = {
+                    lastTopic: userText.substring(0, 100) || 'Discussion',
+                    lastResponse: modelText,
+                    timestamp: Date.now()
+                  };
+                  
+                  // Auto-track search results for potential email follow-up
                   if (searchResultsRef.current.length > 0 && modelText.length > 100) {
                     const recentSearches = searchResultsRef.current.filter(s => Date.now() - s.timestamp < 30000);
-                    if (recentSearches.length > 0) {
-                      const searchQuery = recentSearches[0].query;
-                      const toolName = recentSearches[0].tool;
-                      const links = extractLinks(modelText);
-                      await sendGenericEmail(
-                        userEmail || 'noreply@local',
-                        `${toolName} Results: ${searchQuery}`,
-                        modelText,
-                        personaRef.current.name,
-                        connectionIdRef.current || 'unknown',
-                        'standard',
-                        links
-                      );
-                      searchResultsRef.current = searchResultsRef.current.filter(s => !recentSearches.includes(s));
+                    if (recentSearches.length > 0 && verbose) {
+                      dispatchLog('info', 'Search Results', `Tracked ${recentSearches.length} recent searches - AI should offer to email`);
                     }
                   }
                   
@@ -935,18 +970,96 @@ export function useGeminiLive({
                   setDetectedLanguage((call.args as any).language);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'ok' } }] }));
                 } else if (call.name === 'send_email') {
-                  if (verbose) dispatchLog('info', 'DEBUG toolCall', `send_email argsKeys=${Object.keys(call.args || {}).join(',')}`);
+                  dispatchLog('info', '📧 EMAIL TOOL CALLED', `Args: ${Object.keys(call.args || {}).join(', ')}`);
+                  console.log('[EMAIL TOOL] Full args:', call.args);
                   try {
                     const template = (call.args as any).template || 'standard';
-                    const body = (call.args as any).body || '';
-                    // Validate that body has actual content, not placeholder text
-                    if (!body || body.length < 20 || /\[list of|\[placeholder|\[insert/.test(body)) {
-                      dispatchLog('warn', 'Email Rejected', 'Body contains placeholder text or is too short');
-                      sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Email body must contain actual information, not placeholders. Please provide the full details.' } }] }));
-                    } else {
-                      const success = await sendGenericEmail((call.args as any).recipient_email || userEmail || 'noreply@local', (call.args as any).subject, body, personaRef.current.name, connectionIdRef.current || 'unknown', template, []);
-                      sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: success ? 'Email sent successfully with full details' : 'Email failed to send' } }] }));
+                    let body = (call.args as any).body || '';
+                    let subject = (call.args as any).subject || 'Information from VCB-AI';
+                    
+                    // BULLETPROOF EMAIL LOGIC - Build comprehensive email from all available context
+                    const emailParts: string[] = [];
+                    
+                    // 1. Include AI's provided body first
+                    if (body && body.length > 5) {
+                      emailParts.push(body);
+                      emailParts.push('\n---\n');
                     }
+                    
+                    // 2. Add recent maps/directions if available (within 2 minutes)
+                    const recentMaps = lastMapsDestinationRef.current;
+                    if (recentMaps && Date.now() - recentMaps.timestamp < 120000) {
+                      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(recentMaps.destination)}&travelmode=${recentMaps.mode}`;
+                      emailParts.push(`📍 DIRECTIONS\nDestination: ${recentMaps.destination}\nTravel Mode: ${recentMaps.mode}\n\nGoogle Maps Link:\n${mapsUrl}\n`);
+                      if (!subject.toLowerCase().includes('direction')) {
+                        subject = `Directions: ${recentMaps.destination}`;
+                      }
+                      dispatchLog('info', 'Email Enhanced', 'Added maps directions');
+                    }
+                    
+                    // 3. Add recent search context if available (within 2 minutes)
+                    const recentSearches = searchResultsRef.current.filter(s => Date.now() - s.timestamp < 120000);
+                    if (recentSearches.length > 0) {
+                      emailParts.push(`\n🔍 SEARCH QUERIES\n${recentSearches.map(s => `- ${s.tool}: ${s.query}`).join('\n')}\n`);
+                      dispatchLog('info', 'Email Enhanced', `Added ${recentSearches.length} search queries`);
+                    }
+                    
+                    // 4. Add fetched URL content if available (within 2 minutes)
+                    const recentUrl = fetchedUrlContentRef.current;
+                    if (recentUrl && Date.now() - recentUrl.timestamp < 120000) {
+                      emailParts.push(`\n🌐 WEB CONTENT\nSource: ${recentUrl.url}\n\n${recentUrl.content.substring(0, 2000)}\n`);
+                      dispatchLog('info', 'Email Enhanced', 'Added fetched URL content');
+                    }
+                    
+                    // 5. Add recent conversation context (within 2 minutes)
+                    const recentContext = conversationContextRef.current;
+                    if (recentContext && Date.now() - recentContext.timestamp < 120000 && recentContext.lastResponse.length > 50) {
+                      emailParts.push(`\n💬 CONVERSATION SUMMARY\nTopic: ${recentContext.lastTopic}\n\nResponse:\n${recentContext.lastResponse}\n`);
+                      dispatchLog('info', 'Email Enhanced', 'Added conversation context');
+                    }
+                    
+                    // 6. Add user location if available
+                    if (userLocationRef.current) {
+                      emailParts.push(`\n📌 YOUR LOCATION\nLatitude: ${userLocationRef.current.latitude.toFixed(4)}\nLongitude: ${userLocationRef.current.longitude.toFixed(4)}\n`);
+                    }
+                    
+                    // 6. Build final comprehensive body
+                    const finalBody = emailParts.length > 0 
+                      ? emailParts.join('\n')
+                      : 'Information from your conversation with VCB-AI.';
+                    
+                    // Extract all links from the final body
+                    const links = extractLinks(finalBody);
+                    
+                    dispatchLog('info', 'Email Sending', `Subject: ${subject}`);
+                    dispatchLog('info', 'Email Content', `${finalBody.length} chars, ${links.length} links`);
+                    
+                    // Send the comprehensive email
+                    const success = await sendGenericEmail(
+                      (call.args as any).recipient_email || userEmail || 'noreply@local',
+                      subject,
+                      finalBody,
+                      personaRef.current.name,
+                      connectionIdRef.current || 'unknown',
+                      template,
+                      links
+                    );
+                    
+                    if (success) {
+                      dispatchLog('success', 'Email Sent', `${finalBody.length} chars with full context`);
+                    }
+                    
+                    sessionPromise.then((s: any) => s.sendToolResponse({ 
+                      functionResponses: [{ 
+                        id: call.id, 
+                        name: call.name, 
+                        response: { 
+                          result: success 
+                            ? `Email sent successfully with ${emailParts.length} sections of information` 
+                            : 'Email failed to send' 
+                        } 
+                      }] 
+                    }));
                   } catch (e) {
                     dispatchLog('error', 'Email Tool Error', String(e));
                     sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Error sending email' } }] }));
@@ -958,12 +1071,30 @@ export function useGeminiLive({
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result } }] }));
                 } else if (call.name === 'open_maps') {
                   if (verbose) dispatchLog('info', 'DEBUG toolCall', `open_maps destination=${(call.args as any).destination}`);
-                  const destination = encodeURIComponent((call.args as any).destination || '');
+                  const destination = (call.args as any).destination || '';
                   const mode = (call.args as any).mode || 'driving';
-                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=${mode}`;
+                  
+                  // Store the destination for potential email follow-up
+                  lastMapsDestinationRef.current = {
+                    destination,
+                    mode,
+                    timestamp: Date.now()
+                  };
+                  
+                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
                   window.open(mapsUrl, '_blank');
-                  dispatchLog('success', 'Maps Opened', `Directions to: ${(call.args as any).destination}`);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Maps opened' } }] }));
+                  dispatchLog('success', 'Maps Opened', `Directions to: ${destination}`);
+                  
+                  // Return detailed response so AI knows what was opened
+                  sessionPromise.then((s: any) => s.sendToolResponse({ 
+                    functionResponses: [{ 
+                      id: call.id, 
+                      name: call.name, 
+                      response: { 
+                        result: `Maps opened with ${mode} directions to: ${destination}. Google Maps URL: ${mapsUrl}` 
+                      } 
+                    }] 
+                  }));
                 } else if (call.name === 'make_call') {
                   const phone = (call.args as any).phone_number;
                   const name = (call.args as any).contact_name || phone;
@@ -1018,6 +1149,57 @@ export function useGeminiLive({
                   window.open(calendarUrl, '_blank');
                   dispatchLog('success', 'Calendar Opened', `Event: ${(call.args as any).title}`);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Calendar event created' } }] }));
+                } else if (call.name === 'fetch_url_content') {
+                  const url = (call.args as any).url;
+                  const customInstruction = (call.args as any).custom_instruction || '';
+                  dispatchLog('info', '🌐 Fetching URL', url.substring(0, 50));
+                  
+                  try {
+                    // Use a CORS proxy for fetching
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+                    const html = data.contents;
+                    
+                    // Extract text content (basic HTML stripping)
+                    const text = html
+                      .replace(/<script[^>]*>.*?<\/script>/gi, '')
+                      .replace(/<style[^>]*>.*?<\/style>/gi, '')
+                      .replace(/<[^>]+>/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .substring(0, 5000); // Limit to 5000 chars
+                    
+                    // Store for email inclusion
+                    fetchedUrlContentRef.current = {
+                      url,
+                      content: text,
+                      timestamp: Date.now()
+                    };
+                    
+                    dispatchLog('success', 'URL Content Fetched', `${text.length} chars`);
+                    
+                    const summary = customInstruction 
+                      ? `Content from ${url} (focusing on: ${customInstruction}):\n\n${text}`
+                      : `Content from ${url}:\n\n${text}`;
+                    
+                    sessionPromise.then((s: any) => s.sendToolResponse({ 
+                      functionResponses: [{ 
+                        id: call.id, 
+                        name: call.name, 
+                        response: { result: summary } 
+                      }] 
+                    }));
+                  } catch (error) {
+                    dispatchLog('error', 'URL Fetch Failed', String(error));
+                    sessionPromise.then((s: any) => s.sendToolResponse({ 
+                      functionResponses: [{ 
+                        id: call.id, 
+                        name: call.name, 
+                        response: { result: `Failed to fetch URL: ${String(error)}` } 
+                      }] 
+                    }));
+                  }
                 } else if (call.name === 'share_content') {
                   const shareData = {
                     title: (call.args as any).title || 'VCB PoLYGoN',
@@ -1065,6 +1247,8 @@ export function useGeminiLive({
             }
           },
           onclose: (e: any) => {
+            console.log('[ONCLOSE DEBUG] Fired! code:', e?.code, 'reason:', e?.reason, 'intentional:', isIntentionalDisconnectRef.current);
+            console.trace('[ONCLOSE DEBUG] Call stack');
             dispatchLog('warn', 'DEBUG onclose', `code:${e?.code || 'n/a'} reason:${e?.reason || 'n/a'} intentional:${isIntentionalDisconnectRef.current}`);
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
@@ -1121,6 +1305,7 @@ export function useGeminiLive({
             }
           },
           onerror: (err: any) => {
+            console.log('[SESSION DEBUG] onerror callback fired:', err);
             isConnectedRef.current = false;
             // Log error details and blacklist on auth errors
             const msg = String(err || '');
@@ -1167,10 +1352,10 @@ export function useGeminiLive({
           pcm = normalized;
         }
         
-        // Auto-interrupt when user speaks (if enabled)
-        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.02) {
+        // Auto-interrupt when user speaks (if enabled) - higher threshold to avoid background noise
+        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.08) {
           const now = Date.now();
-          if (now - lastInterruptionTsRef.current > 500) {
+          if (now - lastInterruptionTsRef.current > 800) {
             lastInterruptionTsRef.current = now;
             // Stop all active audio sources immediately
             activeSourcesRef.current.forEach(src => {

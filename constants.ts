@@ -26,14 +26,14 @@ const LANGUAGE_FUNC: FunctionDeclaration = {
 
 const EMAIL_FUNC: FunctionDeclaration = {
   name: 'send_email',
-  description: 'Send email to user with important information, summaries, or follow-up details. Use when user requests it or when sharing critical information that should be saved (e.g., directions, search results, recommendations, legal advice, meeting notes).',
+  description: 'CRITICAL TOOL: Send email to user. Call this IMMEDIATELY when user says "email me", "send me that", "email this", or agrees to receive email. The system automatically includes ALL context (directions, searches, conversation, location). Just provide subject and brief body.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      subject: { type: Type.STRING, description: 'Clear, concise email subject line' },
-      body: { type: Type.STRING, description: 'Well-formatted email body with the information to send' },
-      recipient_email: { type: Type.STRING, description: 'Recipient email address (optional, defaults to user email)' },
-      template: { type: Type.STRING, enum: ['standard', 'legal'], description: 'Email template: standard for general info, legal for legal advice with plain language explanations' }
+      subject: { type: Type.STRING, description: 'Email subject' },
+      body: { type: Type.STRING, description: 'Brief message - system auto-adds full context' },
+      recipient_email: { type: Type.STRING, description: 'Optional recipient (defaults to user email)' },
+      template: { type: Type.STRING, enum: ['standard', 'legal'], description: 'standard or legal template' }
     },
     required: ['subject', 'body'],
   },
@@ -53,11 +53,11 @@ const QUERY_LRA_FUNC: FunctionDeclaration = {
 
 const OPEN_MAPS_FUNC: FunctionDeclaration = {
   name: 'open_maps',
-  description: 'Open the default map app with directions or location. Use when user asks for directions, navigation, or "how to get to" a place.',
+  description: 'Open the default map app with directions or location. Use when user asks for directions, navigation, or "how to get to" a place. After opening maps, if user asks to email directions, the system will automatically include the destination and Google Maps link in the email.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      destination: { type: Type.STRING, description: 'The destination address or place name' },
+      destination: { type: Type.STRING, description: 'The complete destination address or place name' },
       mode: { type: Type.STRING, enum: ['driving', 'walking', 'transit'], description: 'Travel mode (default: driving)' }
     },
     required: ['destination'],
@@ -158,8 +158,21 @@ const SHARE_CONTENT_FUNC: FunctionDeclaration = {
   },
 };
 
+const FETCH_URL_FUNC: FunctionDeclaration = {
+  name: 'fetch_url_content',
+  description: 'Fetch detailed content from a URL. Use ONLY when user explicitly asks for more info about a link or you suggest it and user agrees. Never auto-fetch.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      url: { type: Type.STRING, description: 'The URL to fetch content from' },
+      custom_instruction: { type: Type.STRING, description: 'Optional: specific instruction for what to extract or focus on from the page' }
+    },
+    required: ['url'],
+  },
+};
+
 export const LIVE_API_TOOLS: Tool[] = [
-  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC] },
+  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC, FETCH_URL_FUNC] },
   { googleSearch: {} },
 ];
 
