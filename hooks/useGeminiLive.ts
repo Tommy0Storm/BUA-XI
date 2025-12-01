@@ -854,7 +854,10 @@ ${globalRules}`;
             demoTimerRef.current = window.setInterval(() => {
               setTimeLeft(prev => {
                 if (prev <= 1) {
-                  disconnect('Demo time limit reached.', true);
+                  if (connectRef.current) {
+                    manualUserActionRef.current = true;
+                    disconnect('Demo time limit reached.', true);
+                  }
                   return 0;
                 }
                 return prev - 1;
