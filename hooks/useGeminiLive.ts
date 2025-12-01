@@ -1409,7 +1409,7 @@ ${globalRules}`;
       sessionRef.current = sessionPromise;
       
       // Log if session promise rejects
-      sessionPromise.catch((err) => {
+      sessionPromise.catch((err: any) => {
         console.error('[SESSION] Promise rejected:', err);
         dispatchLog('error', 'Session Failed', String(err));
       });
