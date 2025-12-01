@@ -53,15 +53,18 @@ export default function App() {
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-600 via-yellow-500 to-red-600">Talks, Hears & Sees</span><br />
           <span className="text-2xl sm:text-4xl lg:text-5xl">in All 11 Official Languages.</span>
         </h1>
-        <p className="text-base sm:text-xl lg:text-2xl text-gray-500 mb-6 sm:mb-8 max-w-3xl mx-auto">
+        <p className="text-base sm:text-xl lg:text-2xl text-gray-500 mb-6 sm:mb-8 max-w-3xl mx-auto hidden sm:block">
           Speak to it in <span className="font-bold text-gray-900">isiZulu</span>. Show it a document in <span className="font-bold text-gray-900">Afrikaans</span>. It responds in <span className="font-bold text-gray-900">Sesotho</span>.
+        </p>
+        <p className="text-sm text-gray-500 mb-6 max-w-xl mx-auto sm:hidden">
+          True multilingual understanding. Code-switches naturally.
         </p>
         <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-8 sm:mb-12 max-w-4xl mx-auto">
           {['English', 'isiZulu', 'isiXhosa', 'Afrikaans', 'Sepedi', 'Setswana', 'Sesotho', 'Xitsonga', 'siSwati', 'Tshivenda', 'isiNdebele'].map((lang) => (
             <span key={lang} className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-green-50 via-yellow-50 to-red-50 border border-gray-200 rounded-full text-xs sm:text-sm font-bold text-gray-700">{lang}</span>
           ))}
         </div>
-        <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-8 sm:mb-12 max-w-2xl mx-auto">
+        <p className="text-sm sm:text-base lg:text-lg text-gray-600 mb-8 sm:mb-12 max-w-2xl mx-auto hidden sm:block">
           Not just translation. True understanding. Code-switches mid-sentence. Reads street signs in any language. Understands "Now Now" vs "Just Now".
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
@@ -104,7 +107,8 @@ export default function App() {
           Deploy a 20-Seat Call Center <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-yellow-400">in 5 Minutes.</span>
         </h2>
-        <p className="text-base sm:text-lg lg:text-xl text-gray-300 max-w-3xl mx-auto mb-8 sm:mb-12 lg:mb-16">Debt collection, sales, helpdesk support—all speaking 11 languages.</p>
+        <p className="text-base sm:text-lg lg:text-xl text-gray-300 max-w-3xl mx-auto mb-8 sm:mb-12 lg:mb-16 hidden sm:block">Debt collection, sales, helpdesk support—all speaking 11 languages.</p>
+        <p className="text-sm text-gray-300 max-w-xl mx-auto mb-8 sm:hidden">Deploy multilingual agents instantly.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <div className="bg-white/10 backdrop-blur-sm p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-white/20">
             <div className="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center mb-4 mx-auto"><Database className="text-red-400 w-6 h-6" /></div>
@@ -151,8 +155,11 @@ export default function App() {
             See What I See. <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">Understand Everything.</span>
           </h2>
-          <p className="text-base sm:text-lg text-gray-400 max-w-3xl mx-auto">
+          <p className="text-base sm:text-lg text-gray-400 max-w-3xl mx-auto hidden sm:block">
             Share your screen, monitor video feeds, watch your farm—VCB <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 font-bold">PoLYGLoT</span> sees, understands, and acts.
+          </p>
+          <p className="text-sm text-gray-400 max-w-xl mx-auto sm:hidden">
+            Screen share, video monitoring, real-time analysis.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -200,17 +207,17 @@ export default function App() {
         </div>
       ))}
 
-      <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-[45] flex gap-3 items-center">
+      <div className="fixed bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 z-[45] flex gap-3 items-center bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
         <button 
           onClick={() => setIsPaused(!isPaused)} 
-          className="w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-all shadow-lg"
+          className="w-9 h-9 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-all shadow-lg hover:scale-110"
           title={isPaused ? "Resume slideshow" : "Pause slideshow"}
         >
-          {isPaused ? <Play size={16} className="text-gray-900" /> : <Pause size={16} className="text-gray-900" />}
+          {isPaused ? <Play size={18} className="text-gray-900 ml-0.5" /> : <Pause size={18} className="text-gray-900" />}
         </button>
         <div className="flex gap-2">
           {[0, 1, 2].map((i) => (
-            <button key={i} onClick={() => setCurrentSlide(i)} className={`w-2 h-2 rounded-full transition-all ${currentSlide === i ? 'bg-white w-8' : 'bg-white/50'}`}></button>
+            <button key={i} onClick={() => setCurrentSlide(i)} className={`h-2 rounded-full transition-all ${currentSlide === i ? 'bg-white w-8' : 'bg-white/50 w-2 hover:bg-white/70'}`}></button>
           ))}
         </div>
       </div>

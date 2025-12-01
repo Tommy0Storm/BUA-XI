@@ -125,6 +125,7 @@ export const ChatWidget: React.FC = () => {
   const isResizingRef = useRef(false);
   const [hoveredPersona, setHoveredPersona] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [autoConnectDone, setAutoConnectDone] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -181,6 +182,15 @@ export const ChatWidget: React.FC = () => {
       enableVision: enableVisionEnv,
       forcedModel: forcedModel
   });
+
+  useEffect(() => {
+    if (autoConnectDone) return;
+    
+    setUserEmail('test@example.com');
+    setIsOpen(true);
+    scheduleHeavy(() => connect());
+    setAutoConnectDone(true);
+  }, [autoConnectDone, connect]);
 
   const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
 
@@ -367,6 +377,7 @@ export const ChatWidget: React.FC = () => {
   // --- VIEW: CONNECTED (VOICE STAGE) ---
   // Show stage if we are connected OR if we are latched (during closing animation)
   if ((status === 'connected' || status === 'connecting' || showStage) && isOpen) {
+
       return (
         <div className={`fixed inset-0 sm:bottom-6 sm:right-6 sm:inset-auto z-50 flex flex-col items-center sm:origin-bottom-right font-sans transition-all duration-300 ease-in-out ${animationClass}`}>
              
@@ -397,7 +408,7 @@ export const ChatWidget: React.FC = () => {
                     
                     <button 
                         onClick={() => handleDisconnect(true)}
-                        className="p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-all active:scale-95"
+                        className="p-2.5 sm:p-2 text-white/60 hover:text-white rounded-full hover:bg-white/10 transition-all active:scale-95 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                         title="End Call"
                     >
                         <X size={20} strokeWidth={1.5} />
@@ -657,7 +668,7 @@ export const ChatWidget: React.FC = () => {
             )}
 
             <div className="flex-1 p-3 sm:p-6 bg-gray-50/50 overflow-y-auto overscroll-contain flex flex-col">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 auto-rows-fr">
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 auto-rows-fr">
                     {PERSONAS.map(persona => {
                         const isSelected = selectedPersonaId === persona.id;
                         return (

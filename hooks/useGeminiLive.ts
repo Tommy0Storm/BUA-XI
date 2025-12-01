@@ -29,6 +29,7 @@ export interface UseGeminiLiveProps {
   apiKey?: string | undefined; // optional override
   persona: Persona;
   speechThreshold?: number; // Configurable VAD threshold
+  interruptionThreshold?: number; // RMS threshold for auto-interruption (default 0.08)
   userEmail?: string;
   verboseLogging?: boolean; // enable more detailed logs (no secrets)
   enableVision?: boolean; // whether to send camera frames to the model (default true)
@@ -50,6 +51,7 @@ export function useGeminiLive({
   apiKey: overrideApiKey,
   persona,
   speechThreshold = 0.02, // slightly higher default to reduce false triggers
+  interruptionThreshold = 0.08, // RMS threshold for detecting user speech during model output
   userEmail,
   verboseLogging,
   enableVision: enableVisionProp,
@@ -635,16 +637,19 @@ export function useGeminiLive({
       inputAnalyser.fftSize = 512;
       inputAnalyserRef.current = inputAnalyser;
 
-      // Use ScriptProcessorNode with 256 buffer like colab (suppress deprecation warning)
-      const processor = inputCtx.createScriptProcessor(256, 1, 1);
-      workletNodeRef.current = processor as any;
-      // Suppress console deprecation warning for ScriptProcessorNode
-      if (processor) (processor as any)._suppressDeprecationWarning = true;
-
-      // Connect: Source -> Analyser -> Processor
+      // Use AudioWorklet for better performance (non-blocking)
+      const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+      const workletUrl = URL.createObjectURL(blob);
+      await inputCtx.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+      
+      const workletNode = new AudioWorkletNode(inputCtx, 'pcm-processor');
+      workletNodeRef.current = workletNode;
+      
+      // Connect: Source -> Analyser -> Worklet
       source.connect(inputAnalyser);
-      inputAnalyser.connect(processor);
-      processor.connect(inputCtx.destination);
+      inputAnalyser.connect(workletNode);
+      workletNode.connect(inputCtx.destination);
 
       // --- Instantiate GoogleGenAI client (with selected API key) ---
       let ai: any;
@@ -720,16 +725,80 @@ export function useGeminiLive({
       console.log('[MODEL DEBUG] Vision enabled:', enableVisionRef.current);
       if (verbose) dispatchLog('info', 'DEBUG', `Using model: ${chosenModel} (vision:${enableVisionRef.current})`);
 
-      const userEmailContext = userEmail ? `\n\nUSER EMAIL: ${userEmail}` : '';
+      // Build structured prompt with XML markup
+      const userEmailContext = userEmail ? `<user_identity>\nUSER EMAIL: ${userEmail}\n</user_identity>` : '';
+      
       const locationContext = userLocationRef.current 
-        ? `\n\n🌍 USER LOCATION (CRITICAL): The user is currently at GPS coordinates Latitude ${userLocationRef.current.latitude.toFixed(4)}, Longitude ${userLocationRef.current.longitude.toFixed(4)}. This is their EXACT physical location RIGHT NOW. NEVER ask "where are you?" or "what's your location?" - YOU ALREADY KNOW IT. Use these coordinates automatically for: directions (as starting point), nearby searches, distance calculations, and location-based recommendations. When giving directions, always say "from your current location" not "from where you are".`
-        : `\n\n⚠️ USER LOCATION: User denied location access. You must ask for their location/address when needed for directions or nearby searches.`;
-      const emailContext = `\n\n📧 EMAIL PROTOCOL: After providing search results, directions, or important information, ALWAYS proactively offer to email it. Say "Would you like me to email you these details?" or "I can send this to your email if you'd like." When user agrees, call the send_email tool immediately.`;
+        ? `<rule id="location_awareness">\n🌍 USER LOCATION (CRITICAL): The user is currently at GPS coordinates Latitude ${userLocationRef.current.latitude.toFixed(4)}, Longitude ${userLocationRef.current.longitude.toFixed(4)}. This is their EXACT physical location RIGHT NOW. NEVER ask "where are you?" or "what's your location?" - YOU ALREADY KNOW IT. Use these coordinates automatically for: directions (as starting point), nearby searches, distance calculations, and location-based recommendations. When giving directions, always say "from your current location" not "from where you are".\n</rule>`
+        : `<rule id="location_awareness">\n⚠️ USER LOCATION: User denied location access. You must ask for their location/address when needed for directions or nearby searches.\n</rule>`;
+      
+      const toolProtocols = `<tool_protocols>
+  <protocol for="send_email">
+    After providing search results, directions, or important information, ALWAYS proactively offer to email it by saying "Would you like me to email you these details?" or "I can send this to your email if you'd like." When user agrees, call the send_email tool immediately.
+  </protocol>
+  <protocol for="open_maps">
+    When a user asks for directions, call the open_maps tool immediately. Afterwards, confirm by saying "I've opened the map for you" and then offer to email the directions.
+  </protocol>
+  <protocol for="query_lra_document">
+    If the user asks a legal question related to dismissals or the LRA, state "Let me consult the LRA document for that" and immediately use the query_lra_document tool.
+  </protocol>
+  <protocol for="google_search">
+    After presenting search results, always offer: "Would you like me to email you these results?"
+  </protocol>
+  <protocol for="fetch_url_content">
+    Only use when user explicitly asks for more info about a link. After fetching, offer to email the content.
+  </protocol>
+</tool_protocols>`;
+
+      const visionProtocol = enableVisionRef.current ? `<vision_protocol>
+  - When the user's camera is active, you MUST comment on relevant objects or context you see
+  - If you see a specific item the user mentions, confirm it by saying "I see the [item] you're referring to"
+  - Use visual information to enhance your responses and provide context-aware assistance
+  - Proactively describe what you observe when it's relevant to the conversation
+</vision_protocol>` : '';
+
+      const verbalNuances = `<verbal_nuances>
+  <filler_words>
+    To sound more natural, incorporate common South African affirmations and hesitations where appropriate:
+    - 'Ja' (yes/agreement), 'Nee' (no), 'Eish' (surprise/concern), 'Yoh' (shock/amazement)
+    - 'Ag' (oh/ah), 'Shame' (sympathy), 'Haibo' (disbelief)
+    Use sparingly - only when it feels genuinely natural to the conversation flow.
+  </filler_words>
+  <non_speech_sounds>
+    You can use natural human reactions when genuinely appropriate:
+    - Light laughter or chuckle when something is amusing
+    - Brief sigh when empathizing with frustration
+    - Thoughtful pause ('hmm') when considering a complex question
+    Use these ONLY when it's a very natural human response. Overuse will sound uncanny.
+  </non_speech_sounds>
+</verbal_nuances>`;
+
+      const globalRules = `<rules_of_engagement>
+  ${locationContext}
+  <rule id="interruption_handling">
+    If interrupted by the user while speaking, IMMEDIATELY stop and listen. Acknowledge with a brief phrase appropriate to your persona (e.g., "Go ahead", "Yes?", "I'm listening"), then let the user speak.
+  </rule>
+  <rule id="language_detection">
+    When user switches language, call report_language_change tool immediately. Mirror the user's language choice throughout the conversation.
+  </rule>
+  ${visionProtocol}
+  ${verbalNuances}
+  ${toolProtocols}
+</rules_of_engagement>`;
       
       // Log what we're sending to the AI
       console.log('[SYSTEM INSTRUCTION] Location context:', locationContext.substring(0, 200));
       console.log('[SYSTEM INSTRUCTION] Has location:', !!userLocationRef.current);
       
+      // Construct final structured system instruction
+      const structuredSystemInstruction = `<persona_definition>
+${systemInstructionToUse}
+</persona_definition>
+
+${userEmailContext}
+
+${globalRules}`;
+
       console.log('[SESSION DEBUG] About to call ai.live.connect...');
       const sessionPromise = ai.live.connect({
         model: chosenModel,
@@ -738,7 +807,7 @@ export function useGeminiLive({
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: personaRef.current.voiceName } }
           },
-          systemInstruction: systemInstructionToUse + userEmailContext + locationContext + emailContext,
+          systemInstruction: structuredSystemInstruction,
           temperature: personaRef.current.temperature ?? 0.7,
           tools: LIVE_API_TOOLS,
           toolConfig: userLocationRef.current ? { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } } : undefined
@@ -1355,45 +1424,28 @@ export function useGeminiLive({
 
       sessionRef.current = sessionPromise;
 
-      // Setup ScriptProcessorNode callback with RMS normalization from colab.txt
-      processor.onaudioprocess = (e: AudioProcessingEvent) => {
-        if (!safeToSpeakRef.current) return;
-        if (!isConnectedRef.current || isMicMutedRef.current) return;
+      // Setup AudioWorklet message handler (RMS normalization done in worklet)
+      workletNode.port.postMessage({ type: 'setSafeToSpeak', value: false });
+      workletNode.port.postMessage({ type: 'setMuted', value: isMicMutedRef.current });
+      
+      workletNode.port.onmessage = (e) => {
+        if (e.data.type !== 'audio') return;
+        if (!isConnectedRef.current) return;
         
-        let pcm = e.inputBuffer.getChannelData(0);
+        const pcm = e.data.data;
+        const rms = e.data.rms;
         
-        // RMS normalization from colab.txt - targetRms 0.1 to prevent noise
-        let sumSquares = 0;
-        for (let i = 0; i < pcm.length; i++) sumSquares += pcm[i] * pcm[i];
-        const rms = Math.sqrt(sumSquares / pcm.length);
-        
-        if (rms > 0.001) {
-          const targetRms = 0.1; // Colab.txt recommended value
-          const gain = Math.min(targetRms / rms, 2.5); // Reduced from 3.8 to prevent over-amplification
-          const normalized = new Float32Array(pcm.length);
-          for (let i = 0; i < pcm.length; i++) {
-            let v = pcm[i] * gain;
-            // Soft limiting to prevent clipping
-            if (v > 1) v = 1 - (1 / (v + 1e-6));
-            if (v < -1) v = -1 + (1 / (-v + 1e-6));
-            normalized[i] = v;
-          }
-          pcm = normalized;
-        }
-        
-        // Auto-interrupt when user speaks (if enabled) - higher threshold to avoid background noise
-        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.15) {
+        // Auto-interrupt when user speaks (if enabled)
+        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > interruptionThreshold) {
           const now = Date.now();
           if (now - lastInterruptionTsRef.current > 800) {
             lastInterruptionTsRef.current = now;
-            // Stop all active audio sources immediately
             activeSourcesRef.current.forEach(src => {
               try { src.stop(); src.disconnect(); } catch (e) {}
             });
             activeSourcesRef.current.clear();
             nextStartTimeRef.current = outputCtx.currentTime;
             modelIsSpeakingRef.current = false;
-            // Send interruption signal to API (await for stability)
             (async () => {
               try {
                 const session = await sessionPromise;
@@ -1407,7 +1459,6 @@ export function useGeminiLive({
         }
         
         const blob = createPcmBlob(pcm, AUDIO_CONFIG.inputSampleRate);
-        
         sessionPromise.then((session: any) => {
           try {
             session.sendRealtimeInput({ media: blob });
@@ -1415,6 +1466,14 @@ export function useGeminiLive({
             if (verbose) dispatchLog('warn', 'Audio Send Failed', String(e));
           }
         }).catch(() => {});
+      };
+      
+      // Update worklet state when safeToSpeak changes
+      const updateWorkletState = () => {
+        if (workletNode?.port) {
+          workletNode.port.postMessage({ type: 'setSafeToSpeak', value: safeToSpeakRef.current });
+          workletNode.port.postMessage({ type: 'setMuted', value: isMicMutedRef.current });
+        }
       };
     } catch (err: any) {
       // If connect failed due to auth/instantiation, mark key and try next

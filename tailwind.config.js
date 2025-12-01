@@ -13,6 +13,9 @@ export default {
       fontFamily: {
         sans: ['Quicksand', 'sans-serif'],
       },
+      screens: {
+        'xs': '375px',
+      },
     },
   },
   plugins: [],
