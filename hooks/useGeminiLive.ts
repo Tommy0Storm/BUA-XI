@@ -1370,9 +1370,9 @@ export function useGeminiLive({
         }
         
         // Auto-interrupt when user speaks (if enabled) - higher threshold to avoid background noise
-        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.08) {
+        if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > 0.15) {
           const now = Date.now();
-          if (now - lastInterruptionTsRef.current > 800) {
+          if (now - lastInterruptionTsRef.current > 1500) {
             lastInterruptionTsRef.current = now;
             // Stop all active audio sources immediately
             activeSourcesRef.current.forEach(src => {
