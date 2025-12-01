@@ -1337,6 +1337,38 @@ ${globalRules}`;
                     dispatchLog('success', 'Copied for Sharing', 'Content copied (share not supported on this device)');
                     sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Note: Native sharing not supported on this device. Content has been copied to clipboard instead. User can paste it anywhere with Ctrl+V.` } }] }));
                   }
+                } else if (call.name === 'prompt_screen_share') {
+                  const reason = (call.args as any).reason || 'to help you better';
+                  dispatchLog('info', '🖥️ Screen Share Requested', reason.substring(0, 50));
+                  
+                  // Trigger the screen share UI
+                  startScreenShare();
+                  
+                  sessionPromise.then((s: any) => s.sendToolResponse({ 
+                    functionResponses: [{ 
+                      id: call.id, 
+                      name: call.name, 
+                      response: { 
+                        result: `SUCCESS: Screen share dialog has been opened for the user. Reason: "${reason}". The user is now being prompted to select which screen, window, or tab to share. Once they share, you will be able to see their screen in real-time. Be encouraging and let them know you're ready to help guide them through whatever they need!` 
+                      } 
+                    }] 
+                  }));
+                } else if (call.name === 'prompt_camera_share') {
+                  const reason = (call.args as any).reason || 'to see what you\'re looking at';
+                  dispatchLog('info', '📷 Camera Share Requested', reason.substring(0, 50));
+                  
+                  // Trigger the camera UI (not screen share)
+                  toggleVideo(false);
+                  
+                  sessionPromise.then((s: any) => s.sendToolResponse({ 
+                    functionResponses: [{ 
+                      id: call.id, 
+                      name: call.name, 
+                      response: { 
+                        result: `SUCCESS: Camera has been activated for the user. Reason: "${reason}". The user's camera is now turning on and you will soon be able to see what they're pointing it at. Be warm and encouraging - let them know you're excited to help and ask them to show you what they need help with!` 
+                      } 
+                    }] 
+                  }));
                 } else if (call.name === 'google_search' || call.name === 'google_maps') {
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
                   const query = (call.args as any).query || (call.args as any).location || 'N/A';

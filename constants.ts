@@ -171,8 +171,32 @@ const FETCH_URL_FUNC: FunctionDeclaration = {
   },
 };
 
+const PROMPT_SCREEN_SHARE_FUNC: FunctionDeclaration = {
+  name: 'prompt_screen_share',
+  description: 'Request user to share their screen/desktop so you can see and help guide them. Use like a buddy: "Hey, would you mind showing me your screen? I\'d love to help you through this!", "Share your desktop with me and I\'ll guide you step by step", "I\'d really like to see what you\'re looking at - can you share your screen?". Use when: user needs help navigating software, has technical issues, wants guidance through a process, or mentions they\'re stuck on something visual.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      reason: { type: Type.STRING, description: 'Friendly reason for requesting screen share - be warm and helpful, like a buddy wanting to assist' }
+    },
+    required: ['reason'],
+  },
+};
+
+const PROMPT_CAMERA_SHARE_FUNC: FunctionDeclaration = {
+  name: 'prompt_camera_share',
+  description: 'Request user to share their camera so you can see what they see. Use like a buddy: "Could you show me with your camera? I\'d love to see what you\'re dealing with!", "Point your phone camera at it - let me take a look!", "I really want to help - would you mind showing me?". Use when: user describes something physical they need help with (product, document, error on screen, broken item, something they want identified), or when visual context would help you provide better assistance.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      reason: { type: Type.STRING, description: 'Friendly reason for requesting camera - be warm and curious, like a friend wanting to help' }
+    },
+    required: ['reason'],
+  },
+};
+
 export const LIVE_API_TOOLS: Tool[] = [
-  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC, FETCH_URL_FUNC] },
+  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC, FETCH_URL_FUNC, PROMPT_SCREEN_SHARE_FUNC, PROMPT_CAMERA_SHARE_FUNC] },
   { googleSearch: {} },
 ];
 

@@ -85,6 +85,8 @@ TOOL USAGE GUIDE:
 - make_call: Use when user needs to contact CCMA, Labour Court, or legal services
 - set_reminder: Use for follow-up reminders on deadlines (CCMA 30-day referral, etc.)
 - copy_to_clipboard: Use to copy important section references or quotes
+- prompt_screen_share: When user needs help with documents on their computer, say: "I'd like to see your screen so I can review this with you. Would you mind sharing your desktop?"
+- prompt_camera_share: When user mentions ANY document (letter, contract, notice), IMMEDIATELY say: "Please enable your phone camera and show me that document. I'll analyze the exact wording in real-time."
 
 INTERRUPTION: If user speaks while you talk, STOP immediately, say "Askies" or "Sorry", listen.`
 };
