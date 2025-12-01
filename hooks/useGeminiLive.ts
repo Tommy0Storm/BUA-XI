@@ -888,17 +888,8 @@ ${globalRules}`;
             }
           },
           onmessage: async (msg: LiveServerMessage) => {
-            console.log('[SESSION DEBUG] onmessage fired:', msg);
             if (connectionIdRef.current !== myConnectionId) return;
             try {
-
-            // Log what we're receiving
-            const msgKeys = Object.keys(msg).join(', ');
-            console.log('[MESSAGE DEBUG] Message keys:', msgKeys);
-            dispatchLog('info', 'Message Received', `Type: ${msgKeys}`);
-            if (verbose) {
-              dispatchLog('info', 'DEBUG msg', JSON.stringify(msg).substring(0, 500));
-            }
             
             // Check for errors in the message
             if ((msg as any).error) {
