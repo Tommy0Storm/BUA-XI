@@ -31,33 +31,16 @@ const generateEmailHtml = (
     const now = new Date();
     const date = now.toLocaleString('en-ZA', { dateStyle: 'full', timeStyle: 'long' });
     
-    const style = {
-        container: `background-color: #000000; color: #e5e5e5; font-family: 'Courier New', Courier, monospace; padding: 40px; line-height: 1.5; width: 100%; max-width: 800px; margin: 0 auto;`,
-        header: `border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;`,
-        title: `font-size: 24px; letter-spacing: 2px; font-weight: bold; color: #fff; margin: 0;`,
-        subtitle: `font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px;`,
-        metaGrid: `display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; border: 1px solid #222; padding: 20px; background: #050505;`,
-        metaLabel: `font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;`,
-        metaValue: `font-size: 14px; color: #fff; font-weight: bold;`,
-        transcriptBox: `border-left: 1px solid #333; padding-left: 20px;`,
-        entry: `margin-bottom: 20px;`,
-        roleUser: `color: #888; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; text-align: right;`,
-        roleModel: `color: #fff; font-size: 10px; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;`,
-        textUser: `color: #aaa; text-align: right; font-style: italic;`,
-        textModel: `color: #fff;`,
-        footer: `margin-top: 50px; border-top: 1px solid #333; padding-top: 20px; font-size: 10px; color: #fff; text-align: center;`
-    };
-
     const transcriptRows = history.map(entry => {
         const time = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
         const isUser = entry.role === 'user';
         
         return `
-            <div style="${style.entry}">
-                <div style="${isUser ? style.roleUser : style.roleModel}">
+            <div style="margin-bottom: 20px;">
+                <div style="${isUser ? 'color: #888; text-align: right;' : 'color: #fff;'} font-size: 10px; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;">
                     [${time}] ${isUser ? 'CLIENT' : `AGENT (${sanitizeHtml(persona.name.toUpperCase())})`}
                 </div>
-                <div style="${isUser ? style.textUser : style.textModel}">
+                <div style="${isUser ? 'color: #aaa; text-align: right; font-style: italic;' : 'color: #fff;'}">
                     ${sanitizeHtml(entry.text)}
                 </div>
             </div>
@@ -68,47 +51,44 @@ const generateEmailHtml = (
     <!DOCTYPE html>
     <html>
     <body style="margin: 0; padding: 0; background-color: #111;">
-        <div style="${style.container}">
+        <div style="background-color: #000000; color: #e5e5e5; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.5; width: 100%; box-sizing: border-box;">
             <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #333;">
                 <img src="https://i.postimg.cc/vBTy1d27/logo-Wtext-transparent-Black-Back.png" alt="VCB-AI" style="max-width: 200px; height: auto;" />
+                <div style="background: #ff0000; color: #fff; display: inline-block; padding: 5px 15px; margin-top: 10px; font-weight: bold; font-size: 12px; letter-spacing: 2px;">DEMO</div>
             </div>
-            <div style="${style.header}">
-                <div>
-                    <h1 style="${style.title}">VCB-AI // TRANSCRIPT</h1>
-                    <p style="${style.subtitle}">Neural Engine Interaction Log</p>
-                </div>
-                <div style="text-align: right;">
-                    <span style="display: inline-block; padding: 4px 8px; border: 1px solid #fff; font-size: 10px;">CONFIDENTIAL</span>
-                </div>
+            <div style="border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px;">
+                <h1 style="font-size: 24px; letter-spacing: 2px; font-weight: bold; color: #fff; margin: 0;">VCB-AI // TRANSCRIPT</h1>
+                <p style="font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; margin-top: 5px;">Neural Engine Interaction Log</p>
+                <span style="display: inline-block; padding: 4px 8px; border: 1px solid #fff; font-size: 10px; margin-top: 10px;">CONFIDENTIAL</span>
             </div>
             <div style="background-color: #050505; border: 1px solid #222; padding: 20px; margin-bottom: 40px;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                         <td style="padding-bottom: 15px; width: 50%;">
-                            <span style="${style.metaLabel}">SESSION ID</span>
-                            <span style="${style.metaValue}">${sanitizeHtml(sessionId)}</span>
+                            <span style="font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;">SESSION ID</span>
+                            <span style="font-size: 14px; color: #fff; font-weight: bold;">${sanitizeHtml(sessionId)}</span>
                         </td>
                         <td style="padding-bottom: 15px; width: 50%;">
-                            <span style="${style.metaLabel}">DATE</span>
-                            <span style="${style.metaValue}">${date}</span>
+                            <span style="font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;">DATE</span>
+                            <span style="font-size: 14px; color: #fff; font-weight: bold;">${date}</span>
                         </td>
                     </tr>
                     <tr>
                         <td style="width: 50%;">
-                            <span style="${style.metaLabel}">AGENT</span>
-                            <span style="${style.metaValue}">${sanitizeHtml(persona.name)} (${sanitizeHtml(persona.role)})</span>
+                            <span style="font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;">AGENT</span>
+                            <span style="font-size: 14px; color: #fff; font-weight: bold;">${sanitizeHtml(persona.name)} (${sanitizeHtml(persona.role)})</span>
                         </td>
                         <td style="width: 50%;">
-                            <span style="${style.metaLabel}">DURATION</span>
-                            <span style="${style.metaValue}">${Math.round(durationSeconds)} SECONDS</span>
+                            <span style="font-size: 10px; color: #555; text-transform: uppercase; display: block; margin-bottom: 4px;">DURATION</span>
+                            <span style="font-size: 14px; color: #fff; font-weight: bold;">${Math.round(durationSeconds)} SECONDS</span>
                         </td>
                     </tr>
                 </table>
             </div>
-            <div style="${style.transcriptBox}">
+            <div style="border-left: 1px solid #333; padding-left: 20px;">
                 ${transcriptRows}
             </div>
-            <div style="${style.footer}">
+            <div style="margin-top: 50px; border-top: 1px solid #333; padding-top: 20px; font-size: 10px; color: #fff; text-align: center;">
                 GENERATED BY VCB PoLYGoN NEURAL ENGINE<br/>
                 SECURED BY VCB-AI INFRASTRUCTURE<br/>
                 UID: ${sanitizeHtml(sessionId)}
@@ -151,9 +131,10 @@ export const sendGenericEmail = async (
     ` : '';
     
     const wrappedBody = template === 'legal' ? `
-    <div style="background-color: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 40px; max-width: 700px; margin: 0 auto;">
+    <div style="background-color: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 20px; width: 100%; box-sizing: border-box;">
         <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #333;">
             <img src="https://i.postimg.cc/vBTy1d27/logo-Wtext-transparent-Black-Back.png" alt="VCB-AI" style="max-width: 200px; height: auto;" />
+            <div style="background: #ff0000; color: #fff; display: inline-block; padding: 5px 15px; margin-top: 10px; font-weight: bold; font-size: 12px; letter-spacing: 2px;">DEMO</div>
         </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 8px 8px 0 0; text-align: center; margin-top: 20px;">
             <h1 style="color: #fff; margin: 0; font-size: 24px; font-weight: 600;">${subject.includes('Session Started') ? '🔒 CONFIDENTIAL SESSION' : '⚖️ Legal Discussion'}</h1>
@@ -164,7 +145,7 @@ export const sendGenericEmail = async (
                 <p style="margin: 0; font-size: 13px; color: #a0a0a0; font-weight: 600;">📋 LEGAL ANALYSIS</p>
             </div>
             <div style="line-height: 1.8; font-size: 16px; color: #e0e0e0;">
-                ${sanitizeHtml(bodyHtml).replace(/\n/g, '<br>')}
+                ${bodyHtml}
             </div>
             ${linksSection}
             <div style="margin-top: 30px; padding: 15px; background-color: #0f3460; border-radius: 4px; border: 1px solid #667eea;">
@@ -178,16 +159,17 @@ export const sendGenericEmail = async (
         </div>
     </div>
     ` : `
-    <div style="background-color: #000; color: #eee; font-family: sans-serif; padding: 30px; border: 1px solid #333;">
+    <div style="background-color: #000; color: #eee; font-family: sans-serif; padding: 20px; border: 1px solid #333; width: 100%; box-sizing: border-box;">
         <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #333; margin-bottom: 20px;">
             <img src="https://i.postimg.cc/vBTy1d27/logo-Wtext-transparent-Black-Back.png" alt="VCB-AI" style="max-width: 200px; height: auto;" />
+            <div style="background: #ff0000; color: #fff; display: inline-block; padding: 5px 15px; margin-top: 10px; font-weight: bold; font-size: 12px; letter-spacing: 2px;">DEMO</div>
         </div>
         <h2 style="color: #fff; border-bottom: 1px solid #555; padding-bottom: 10px;">Message from ${sanitizeHtml(agentName)}</h2>
         <div style="margin-top: 20px; line-height: 1.6; font-size: 16px;">
-            ${sanitizeHtml(bodyHtml).replace(/\n/g, '<br>')}
+            ${bodyHtml}
         </div>
         ${linksSection}
-        <div style="margin-top: 40px; font-size: 12px; color: #fff; border-top: 1px solid #333; padding-top: 10px;">
+        <div style="margin-top: 40px; font-size: 12px; color: #fff; border-top: 1px solid #333; padding-top: 10px; text-align: center;">
             Generated by VCB PoLYGoN<br/>
             Session: ${sanitizeHtml(sessionId)}<br/>
             ${dateTime}

@@ -1023,10 +1023,19 @@ export function useGeminiLive({
                       emailParts.push(`\n📌 YOUR LOCATION\nLatitude: ${userLocationRef.current.latitude.toFixed(4)}\nLongitude: ${userLocationRef.current.longitude.toFixed(4)}\n`);
                     }
                     
-                    // 6. Build final comprehensive body
-                    const finalBody = emailParts.length > 0 
+                    // 6. Build final comprehensive body with proper HTML formatting
+                    let finalBody = emailParts.length > 0 
                       ? emailParts.join('\n')
                       : 'Information from your conversation with VCB-AI.';
+                    
+                    // Convert plain text to HTML with proper formatting
+                    finalBody = finalBody
+                      .replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/\n/g, '<br>\n')
+                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\* (.+?)$/gm, '&bull; $1');
                     
                     // Extract all links from the final body
                     const links = extractLinks(finalBody);
