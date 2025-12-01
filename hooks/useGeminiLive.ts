@@ -1,9 +1,4 @@
 // hooks/useGeminiLive.ts
-// Prevent HMR from remounting and killing sessions
-if ((import.meta as any)?.hot) {
-  (import.meta as any).hot.accept(() => {});
-}
-
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createGeminiClientOptions, MODELS, AUDIO_INPUT, AUDIO_OUTPUT, DEFAULT_LIVE_CONFIG } from '../gemini.config';
@@ -14,6 +9,11 @@ import { getOutputContext } from '../utils/audio';
 import { ConnectionStatus, Persona } from '../types';
 import { sendTranscriptEmail, sendGenericEmail } from '../services/emailService';
 import { dispatchLog } from '../utils/consoleUtils';
+
+// Prevent HMR from remounting and killing sessions
+if ((import.meta as any)?.hot) {
+  (import.meta as any).hot.accept(() => {});
+}
 import { WORKLET_CODE } from '../utils/workletCode';
 
 // Sanitize log messages to prevent injection

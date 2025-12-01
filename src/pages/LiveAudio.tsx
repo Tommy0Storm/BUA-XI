@@ -1,14 +1,14 @@
-// Prevent HMR from remounting and killing sessions
-if ((import.meta as any)?.hot) {
-  (import.meta as any).hot.accept(() => {});
-}
-
 import { useEffect, useRef, useState } from 'react';
 import { decodeAudio, getOutputContext, createAudioContext } from '../../utils/audio';
 import { createPcmBlob, normalizePcmSimple } from '../../utils/audioUtils';
 import { createLiveSession, startSessionOnce, endSessionOnce } from '../../gemini.session';
 import { AUDIO_INPUT, AUDIO_OUTPUT, MODELS } from '../../gemini.config';
 import { defer } from '../../utils/uiUtils';
+
+// Prevent HMR from remounting and killing sessions
+if ((import.meta as any)?.hot) {
+  (import.meta as any).hot.accept(() => {});
+}
 
 export default function LiveAudioPage() {
   const [connected, setConnected] = useState(false);

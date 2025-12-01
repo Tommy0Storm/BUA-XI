@@ -1,12 +1,11 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { LogEntry } from '../utils/consoleUtils';
+import { Terminal, ShieldCheck, Activity, ChevronRight, CheckCircle2, AlertTriangle, Cpu, Mail, Lock } from 'lucide-react';
 
 // Prevent HMR from remounting and killing sessions
 if ((import.meta as any)?.hot) {
   (import.meta as any).hot.accept(() => {});
 }
-
-import React, { useEffect, useState, useRef } from 'react';
-import { LogEntry } from '../utils/consoleUtils';
-import { Terminal, ShieldCheck, Activity, ChevronRight, CheckCircle2, AlertTriangle, Cpu, Mail, Lock } from 'lucide-react';
 
 export const LiveConsole: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);

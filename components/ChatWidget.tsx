@@ -1,4 +1,13 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useGeminiLive } from '../hooks/useGeminiLive';
+import { PERSONAS } from '../constants';
+import AudioVisualizer from './AudioVisualizer';
+import { sendTranscriptEmail } from '../services/emailService';
+import { 
+  X, Mic, MicOff, LogOut, 
+  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe, Eye, Camera
+} from 'lucide-react';
 
 // Prevent HMR from remounting this widget and killing sessions
 if ((import.meta as any)?.hot) {
@@ -16,15 +25,6 @@ const scheduleHeavy = (fn: () => void) => {
         Promise.resolve().then(() => fn());
     }, 0);
 };
-import { useGeminiLive } from '../hooks/useGeminiLive';
-import { PERSONAS } from '../constants';
-import AudioVisualizer from './AudioVisualizer';
-import { sendTranscriptEmail } from '../services/emailService';
-import { 
-  X, Mic, MicOff, LogOut, 
-  Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe, Eye, Camera
-} from 'lucide-react';
 
 // --- VOICE UI KIT PRIMITIVES ---
 
