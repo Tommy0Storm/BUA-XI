@@ -1469,6 +1469,36 @@ ${globalRules}`;
               currentOutputTranscriptionRef.current = '';
             }
 
+            // Handle toolCallCancellation - cancel pending tool calls when user interrupts
+            if ((msg as any).toolCallCancellation?.ids?.length) {
+              const cancelledIds = (msg as any).toolCallCancellation.ids;
+              dispatchLog('info', 'Tool Calls Cancelled', `IDs: ${cancelledIds.join(', ')}`);
+              // Note: Since we execute tools immediately and send responses, this is mostly informational
+              // Future: could add pending tool tracking to actually cancel in-flight operations
+            }
+
+            // Handle goAway - server will disconnect soon, prepare for reconnect
+            if ((msg as any).goAway) {
+              const goAwayMsg = (msg as any).goAway;
+              dispatchLog('warn', 'Server GoAway', `Server will disconnect. Reason: ${goAwayMsg.reason || 'unspecified'}`);
+              // Preemptively prepare for reconnection - don't wait for close event
+              if (!isIntentionalDisconnectRef.current) {
+                const reconnectDelay = goAwayMsg.gracePeriodMs || 3000;
+                dispatchLog('info', 'Reconnecting', `Preparing reconnect in ${reconnectDelay}ms...`);
+                setTimeout(() => {
+                  if (isConnectedRef.current && connectRef.current) {
+                    // Gracefully close and reconnect
+                    isIntentionalDisconnectRef.current = true;
+                    sessionPromise.then((s: any) => s.close?.()).catch(() => {});
+                    sessionRef.current = null;
+                    stopAudio();
+                    isIntentionalDisconnectRef.current = false;
+                    connectRef.current(true);
+                  }
+                }, Math.max(reconnectDelay - 500, 500)); // Start reconnect slightly before grace period ends
+              }
+            }
+
             // Optional: only attempt parsing code/search results (heavier logic) when there are relevant parts
             const modelParts = (msg as any).serverContent?.modelTurn?.parts;
             if (modelParts?.some((p: any) => p.executableCode || p.codeExecutionResult)) {
@@ -1536,19 +1566,39 @@ ${globalRules}`;
           },
           onerror: (err: any) => {
             isConnectedRef.current = false;
-            // Log error details and blacklist on auth errors
-            const msg = String(err || '');
-            dispatchLog('error', 'Session error', msg);
+            // Enhanced error classification based on Context7 ApiError patterns
+            const errMsg = String(err?.message || err || '');
+            const errStatus = err?.status || (errMsg.match(/\b(4\d{2}|5\d{2})\b/)?.[0] ?? null);
+            
+            dispatchLog('error', 'Session Error', `Status: ${errStatus || 'unknown'} - ${errMsg.slice(0, 150)}`);
+            
             try {
-              // Only mark the key failed on auth-like errors (401/403/invalid key/quota)
-              if (/401|403|api key|invalid key|quota|permission/i.test(msg)) {
+              // Classify error by status code pattern
+              if (errStatus === '401' || errStatus === '403' || /api key|invalid key|unauthor|permission/i.test(errMsg)) {
+                // Authentication/Permission error - blacklist key
                 markKeyFailed(currentKey);
-                dispatchLog('warn', 'API Key', `Marked key as failed due to error: ${msg.slice(0,120)}`);
-              } else if (/not found for API version|not supported for bidiGenerateContent|unsupported modality/i.test(msg)) {
-                // model incompatibility is not a key problem — attempt fallback to multimodal
-                dispatchLog('warn', 'Model Compatibility', `Model '${chosenModel}' appears incompatible for realtime bidi operations (onerror msg). This project expects the native-audio model 'gemini-2.5-flash-native-audio-preview-09-2025' (no automatic fallback to other models).`);
+                dispatchLog('warn', 'API Key', `Auth failure (${errStatus}) — blacklisted key index ${currentKeyIndexRef.current}`);
+              } else if (errStatus === '429' || /rate limit|quota exceeded|too many requests/i.test(errMsg)) {
+                // Rate limit - exponential backoff, don't blacklist key permanently
+                const backoffMs = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000); // Cap at 30s for rate limits
+                dispatchLog('warn', 'Rate Limited', `Too many requests. Backing off ${backoffMs}ms...`);
+                retryCountRef.current += 1;
+                stopAudio();
+                setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoffMs);
+              } else if (errStatus === '404' || /not found for API version|not supported for bidiGenerateContent|unsupported modality/i.test(errMsg)) {
+                // Model incompatibility - not a key problem
+                dispatchLog('warn', 'Model Compatibility', `Model '${chosenModel}' incompatible. Expected: 'gemini-2.5-flash-native-audio-preview-09-2025'`);
+              } else if (errStatus === '400' || /invalid|bad request|malformed/i.test(errMsg)) {
+                // Invalid request - log for debugging
+                dispatchLog('error', 'Invalid Request', `Bad request params: ${errMsg.slice(0, 100)}`);
+              } else if (/network|timeout|connection/i.test(errMsg)) {
+                // Network error - retry without blacklisting
+                dispatchLog('warn', 'Network Error', 'Connection issue - will retry...');
               }
-            } catch (e) {}
+            } catch (e) {
+              // Error handling itself failed - log and continue
+              console.warn('[ERROR HANDLER] Exception in error handler:', e);
+            }
           }
         }
       });
