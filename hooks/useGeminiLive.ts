@@ -786,6 +786,18 @@ export function useGeminiLive({
   <rule id="interruption_handling">
     If interrupted by the user while speaking, IMMEDIATELY stop and listen. Acknowledge with a brief phrase appropriate to your persona (e.g., "Go ahead", "Yes?", "I'm listening"), then let the user speak.
   </rule>
+  <rule id="processing_feedback">
+    CRITICAL: When you call ANY tool (email, search, maps, etc.), you MUST acknowledge it verbally BEFORE the tool executes. NEVER go silent while processing. Use persona-appropriate phrases like:
+    - "Just a sec, let me do that for you..."
+    - "One moment, I'm on it..."
+    - "Hang on, working on that..."
+    - "Sharp sharp, give me a second..."
+    - "Let me quickly sort that out..."
+    - "Busy with that now..."
+    - "Eish, give me a moment..."
+    - "Hold on, I'm checking..."
+    After the tool completes, confirm the result to the user. NEVER leave the user waiting in silence.
+  </rule>
   <rule id="language_detection">
     When user switches language, call report_language_change tool immediately. Mirror the user's language choice throughout the conversation.
   </rule>
