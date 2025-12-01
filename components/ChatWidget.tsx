@@ -162,6 +162,8 @@ export const ChatWidget: React.FC = () => {
   // Long press for disconnect - use ref to avoid re-render issues
   const disconnectTimerRef = useRef<number | null>(null);
   const [disconnectHold, setDisconnectHold] = useState(false);
+  // Prevent disconnect spam during React render cycles
+  const isDisconnectingRef = useRef(false);
     // Default the normal app to use the native audio model for proper audio output
     const [forcedModel, setForcedModel] = useState<string | null>('gemini-2.5-flash-native-audio-preview-09-2025');
 
@@ -270,14 +272,20 @@ export const ChatWidget: React.FC = () => {
 
   // Handle Smooth Closing and Auto-Scroll to Console
   const handleDisconnect = useCallback((force = false) => {
+    // Prevent multiple simultaneous disconnect calls
+    if (isDisconnectingRef.current) {
+      console.log('[DISCONNECT] Blocked - already disconnecting');
+      return;
+    }
+    
     // Prevent disconnect spam during renders - only disconnect if actually connected/connecting
     if (status !== 'connected' && status !== 'connecting') {
       console.log('[DISCONNECT] Blocked - not connected. Status:', status);
       return;
     }
     
-    // Log the call stack to identify what's triggering disconnects (sanitized)
-    console.error('[DISCONNECT TRACE]', sanitizeString(new Error().stack || ''));
+    // Set flag to prevent re-entry
+    isDisconnectingRef.current = true;
     console.log('[DISCONNECT] Force:', force, 'Status:', status);
     
     // mark manual action if user pressed the UI button
@@ -292,6 +300,7 @@ export const ChatWidget: React.FC = () => {
         setIsOpen(false);
         setIsClosing(false);
         setManualUserAction(false); // Reset flag
+        isDisconnectingRef.current = false; // Reset disconnect lock
         
         // 3. Scroll to Console to show email logs
         const consoleSection = document.getElementById('console-section');
@@ -299,7 +308,7 @@ export const ChatWidget: React.FC = () => {
             consoleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, 500);
-  }, [disconnect, setManualUserAction]);
+  }, [status, disconnect, setManualUserAction]);
 
   const toggleWidget = () => {
     if (isOpen) {
