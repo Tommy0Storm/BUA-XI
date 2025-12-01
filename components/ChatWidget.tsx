@@ -124,6 +124,7 @@ export const ChatWidget: React.FC = () => {
   const resizeRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const [hoveredPersona, setHoveredPersona] = useState<string | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -306,8 +307,17 @@ export const ChatWidget: React.FC = () => {
         }, 300);
       }
     } else {
-      setIsOpen(true);
+      setShowPermissionModal(true);
     }
+  };
+
+  const handlePermissionAccept = () => {
+    setShowPermissionModal(false);
+    setIsOpen(true);
+  };
+
+  const handlePermissionDecline = () => {
+    setShowPermissionModal(false);
   };
 
   const handlePersonaSelect = (id: string) => {
@@ -773,6 +783,7 @@ export const ChatWidget: React.FC = () => {
                         <button
                             onClick={() => scheduleHeavy(() => connect())}
                             disabled={!isEmailValid}
+                            title={isEmailValid ? 'Will request: Location, Microphone permissions' : 'Enter valid email first'}
                             className={`w-full sm:w-auto px-8 py-2 rounded-xl shadow-xl transition-all transform flex items-center justify-center gap-3 group whitespace-nowrap font-bold text-sm
                                 ${isEmailValid 
                                     ? 'bg-gradient-to-r from-gray-900 to-gray-800 hover:from-black hover:to-gray-900 text-white hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer' 
@@ -796,8 +807,98 @@ export const ChatWidget: React.FC = () => {
         </div>
       )}
 
+      {/* Permission Consent Modal */}
+      {showPermissionModal && (
+        <>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] animate-fade-in" onClick={handlePermissionDecline}></div>
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto bg-white rounded-2xl shadow-2xl max-w-md w-full animate-scale-in border border-gray-200">
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-600 via-yellow-500 to-red-600 p-6 rounded-t-2xl relative">
+                <div className="absolute top-3 right-3">
+                  <span className="bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full tracking-wider shadow-lg">DEMO</span>
+                </div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/50">
+                    <AlertCircle size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Permission Required</h3>
+                    <p className="text-white/80 text-xs font-medium">VCB PoLYGoN Live Demo</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-4">
+                <p className="text-gray-700 text-sm leading-relaxed">
+                  To provide you with the best demo experience, we need access to the following permissions:
+                </p>
+
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <Mic size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-sm text-gray-900">Microphone</div>
+                      <div className="text-xs text-gray-600">Required for voice interaction with the AI agent</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                    <Video size={20} className="text-purple-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-sm text-gray-900">Camera (Optional)</div>
+                      <div className="text-xs text-gray-600">Enables visual context sharing when needed</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <Globe size={20} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold text-sm text-gray-900">Location</div>
+                      <div className="text-xs text-gray-600">Provides location-aware assistance and local information</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-amber-600" />
+                    <span className="font-bold text-sm text-amber-900">Important Notice</span>
+                  </div>
+                  <ul className="text-xs text-amber-800 space-y-1 ml-6 list-disc">
+                    <li>This is a <strong>DEMONSTRATION</strong> environment</li>
+                    <li>All information generated is for <strong>DEMO PURPOSES ONLY</strong></li>
+                    <li>We do <strong>NOT store</strong> your microphone, camera, or location data</li>
+                    <li>Permissions are used only during your active session</li>
+                    <li>Do not rely on this demo for legal, financial, or medical advice</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 pt-0 flex gap-3">
+                <button
+                  onClick={handlePermissionDecline}
+                  className="flex-1 px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePermissionAccept}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-gray-900 to-gray-800 hover:from-black hover:to-gray-900 text-white rounded-xl font-bold text-sm transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={16} />
+                  I ACCEPT
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Floating Trigger Button (Visible when closed) */}
-      {!isOpen && (
+      {!isOpen && !showPermissionModal && (
         <div className={`fixed bottom-8 right-8 z-50 transition-all duration-300 ${isClosing ? 'translate-y-20 opacity-0' : 'translate-y-0 opacity-100'}`}>
             <button
                 onClick={toggleWidget}
