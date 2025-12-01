@@ -181,13 +181,16 @@ export const ChatWidget: React.FC = () => {
 
   const selectedPersona = PERSONAS.find(p => p.id === selectedPersonaId) || PERSONAS[0];
 
+  // Use persona's forcedModel if defined, otherwise fall back to UI selection
+  const effectiveForcedModel = selectedPersona.forcedModel ?? forcedModel;
+
   const { status, connect, disconnect, setManualUserAction, inputAnalyserRef, outputAnalyserRef, detectedLanguage, transcript, error, isMuted, toggleMute, isMicMuted, toggleMic, timeLeft, transcriptSent, isPttMode, setPttMode, setPttActive, isVideoActive, toggleVideo, startScreenShare, switchCamera, facingMode, videoRef, audioDevices, selectedAudioDeviceId, setSelectedAudioDeviceId } = useGeminiLive({
     apiKey,
     persona: selectedPersona,
     userEmail: userEmail,
         verboseLogging: verboseEnv,
       enableVision: enableVisionEnv,
-      forcedModel: forcedModel
+      forcedModel: effectiveForcedModel
   });
 
   const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);

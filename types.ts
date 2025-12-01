@@ -11,6 +11,7 @@ export interface Persona {
   name: string;
   gender: 'Male' | 'Female';
   voiceName: string; // The Engine voice name (e.g., Fenrir, Puck)
+  forcedModel?: string; // Optional: override the default model for this persona
   role: string;
   vibe: string; // New field for short visual descriptor
   description: string;
