@@ -26,14 +26,14 @@ const LANGUAGE_FUNC: FunctionDeclaration = {
 
 const EMAIL_FUNC: FunctionDeclaration = {
   name: 'send_email',
-  description: 'CRITICAL TOOL: Send email to user. Call this IMMEDIATELY when user says "email me", "send me that", "email this", or agrees to receive email. The system automatically includes ALL context (directions, searches, conversation, location). Just provide subject and brief body.',
+  description: 'CRITICAL TOOL: Send email with full context to user. Call IMMEDIATELY when: user says "email me", "send me that", "email this", "send to my email", agrees to receive info, or after providing directions/search results/legal advice. System auto-includes: maps directions, search results, conversation context, location. Proactively offer: "Would you like me to email this to you?"',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      subject: { type: Type.STRING, description: 'Email subject' },
-      body: { type: Type.STRING, description: 'Brief message - system auto-adds full context' },
-      recipient_email: { type: Type.STRING, description: 'Optional recipient (defaults to user email)' },
-      template: { type: Type.STRING, enum: ['standard', 'legal'], description: 'standard or legal template' }
+      subject: { type: Type.STRING, description: 'Clear, descriptive subject line' },
+      body: { type: Type.STRING, description: 'Detailed message content - be comprehensive, system adds extra context automatically' },
+      recipient_email: { type: Type.STRING, description: 'Optional recipient (defaults to user email from system context)' },
+      template: { type: Type.STRING, enum: ['standard', 'legal'], description: 'Use legal for legal advice, standard for everything else' }
     },
     required: ['subject', 'body'],
   },
@@ -53,12 +53,12 @@ const QUERY_LRA_FUNC: FunctionDeclaration = {
 
 const OPEN_MAPS_FUNC: FunctionDeclaration = {
   name: 'open_maps',
-  description: 'Open the default map app with directions or location. Use when user asks for directions, navigation, or "how to get to" a place. After opening maps, if user asks to email directions, the system will automatically include the destination and Google Maps link in the email.',
+  description: 'Open Google Maps with directions. Use when user asks: "directions to", "how do I get to", "navigate to", "take me to", "where is", or any location/navigation request. ALWAYS offer to email directions after opening: "Would you like me to email you these directions?" The email will include clickable Google Maps link.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      destination: { type: Type.STRING, description: 'The complete destination address or place name' },
-      mode: { type: Type.STRING, enum: ['driving', 'walking', 'transit'], description: 'Travel mode (default: driving)' }
+      destination: { type: Type.STRING, description: 'Full destination address, place name, or business name' },
+      mode: { type: Type.STRING, enum: ['driving', 'walking', 'transit'], description: 'Travel mode - driving (default), walking, or transit/public transport' }
     },
     required: ['destination'],
   },
@@ -92,11 +92,11 @@ const OPEN_WHATSAPP_FUNC: FunctionDeclaration = {
 
 const COPY_TO_CLIPBOARD_FUNC: FunctionDeclaration = {
   name: 'copy_to_clipboard',
-  description: 'Copy text to clipboard. Use when user asks to copy information, save text, or wants to paste something later.',
+  description: 'Copy important text to clipboard for easy pasting. Use when: user asks to "copy", "save this", "remember this", or when sharing phone numbers, addresses, reference numbers, important quotes, or any text user might want to paste elsewhere. Confirm what was copied.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      text: { type: Type.STRING, description: 'Text to copy to clipboard' }
+      text: { type: Type.STRING, description: 'The exact text to copy - format it cleanly for easy use' }
     },
     required: ['text'],
   },
@@ -104,12 +104,12 @@ const COPY_TO_CLIPBOARD_FUNC: FunctionDeclaration = {
 
 const SET_REMINDER_FUNC: FunctionDeclaration = {
   name: 'set_reminder',
-  description: 'Set a browser notification reminder. Use when user says "remind me", "set a reminder", or "alert me in X minutes". Shows notification after specified time.',
+  description: 'Set a notification reminder. Use when user says: "remind me", "set a reminder", "alert me", "notify me", "don\'t let me forget". Also proactively offer for important deadlines (e.g., CCMA 30-day referral, payment due dates, appointment times). Always confirm the reminder details.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      message: { type: Type.STRING, description: 'The reminder message to display in the notification' },
-      minutes: { type: Type.NUMBER, description: 'Number of minutes from now to show the reminder (e.g., 5, 30, 60)' }
+      message: { type: Type.STRING, description: 'Clear reminder message with context (what and why)' },
+      minutes: { type: Type.NUMBER, description: 'Minutes from now (e.g., 5, 15, 30, 60, 120 for 2 hours, 1440 for 24 hours)' }
     },
     required: ['message', 'minutes'],
   },
@@ -117,12 +117,12 @@ const SET_REMINDER_FUNC: FunctionDeclaration = {
 
 const SEND_SMS_FUNC: FunctionDeclaration = {
   name: 'send_sms',
-  description: 'Open SMS app with pre-filled message. Use when user asks to SMS or text them information.',
+  description: 'Open SMS app with pre-filled message. Use when user says: "SMS me", "text me", "send me a text", or when they need information on a basic phone without email/WhatsApp. Good for sending short, important info like addresses, phone numbers, appointment times.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      phone_number: { type: Type.STRING, description: 'Phone number (optional, defaults to user)' },
-      message: { type: Type.STRING, description: 'SMS message text' }
+      phone_number: { type: Type.STRING, description: 'Phone number with country code (optional - opens SMS app without recipient if empty)' },
+      message: { type: Type.STRING, description: 'SMS message - keep it concise (under 160 chars is one SMS)' }
     },
     required: ['message'],
   },
@@ -146,13 +146,13 @@ const CREATE_CALENDAR_EVENT_FUNC: FunctionDeclaration = {
 
 const SHARE_CONTENT_FUNC: FunctionDeclaration = {
   name: 'share_content',
-  description: 'Share text/link via native share menu. Use when user asks to share information with someone.',
+  description: 'Open native share menu to share via any app (WhatsApp, email, social media, etc). Use when user wants to share information with others: "share this", "send this to my friend", "post this". Particularly useful on mobile devices.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      title: { type: Type.STRING, description: 'Share title' },
-      text: { type: Type.STRING, description: 'Text to share' },
-      url: { type: Type.STRING, description: 'URL to share (optional)' }
+      title: { type: Type.STRING, description: 'Title for the share (appears in some apps)' },
+      text: { type: Type.STRING, description: 'Main content to share - make it complete and well-formatted' },
+      url: { type: Type.STRING, description: 'Optional URL to include (e.g., Google Maps link, website)' }
     },
     required: ['text'],
   },
@@ -160,12 +160,12 @@ const SHARE_CONTENT_FUNC: FunctionDeclaration = {
 
 const FETCH_URL_FUNC: FunctionDeclaration = {
   name: 'fetch_url_content',
-  description: 'Fetch detailed content from a URL. Use ONLY when user explicitly asks for more info about a link or you suggest it and user agrees. Never auto-fetch.',
+  description: 'Fetch and read content from a website URL. Use when: user shares a link and asks "what does this say?", "summarize this page", "read this for me", or when you need to verify/expand on search results. After fetching, offer to email the content. Do NOT auto-fetch without user request.',
   parameters: {
     type: Type.OBJECT,
     properties: {
-      url: { type: Type.STRING, description: 'The URL to fetch content from' },
-      custom_instruction: { type: Type.STRING, description: 'Optional: specific instruction for what to extract or focus on from the page' }
+      url: { type: Type.STRING, description: 'The full URL to fetch (must include https://)' },
+      custom_instruction: { type: Type.STRING, description: 'Optional focus instruction: "extract contact info", "find prices", "summarize main points", etc.' }
     },
     required: ['url'],
   },

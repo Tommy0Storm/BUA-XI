@@ -1181,15 +1181,16 @@ ${globalRules}`;
                   
                   const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
                   window.open(mapsUrl, '_blank');
-                  dispatchLog('success', 'Maps Opened', `Directions to: ${destination}`);
+                  dispatchLog('success', 'Maps Opened', `${mode} directions to: ${destination}`);
                   
-                  // Return detailed response so AI knows what was opened
+                  // Return detailed response with email offer prompt
+                  const modeLabel = mode === 'transit' ? 'public transport' : mode;
                   sessionPromise.then((s: any) => s.sendToolResponse({ 
                     functionResponses: [{ 
                       id: call.id, 
                       name: call.name, 
                       response: { 
-                        result: `Maps opened with ${mode} directions to: ${destination}. Google Maps URL: ${mapsUrl}` 
+                        result: `SUCCESS: Google Maps opened with ${modeLabel} directions to "${destination}". The map is now showing the route. IMPORTANT: Proactively ask the user: "Would you like me to email you these directions with the Google Maps link so you have them saved?" If they agree, use send_email with subject "Directions to ${destination}" and include the destination, travel mode, and this clickable link: ${mapsUrl}` 
                       } 
                     }] 
                   }));
@@ -1212,16 +1213,20 @@ ${globalRules}`;
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: feedback } }] }));
                 } else if (call.name === 'copy_to_clipboard') {
                   const text = (call.args as any).text;
+                  const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
                   navigator.clipboard.writeText(text).then(() => {
-                    dispatchLog('success', 'Copied', `Text copied to clipboard`);
+                    dispatchLog('success', 'Copied', `${text.length} characters copied to clipboard`);
                   }).catch(() => {
                     dispatchLog('warn', 'Copy Failed', 'Clipboard access denied');
                   });
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Copied to clipboard' } }] }));
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `SUCCESS: Copied to clipboard (${text.length} characters): "${preview}". Tell the user they can now paste this anywhere with Ctrl+V (or Cmd+V on Mac).` } }] }));
                 } else if (call.name === 'set_reminder') {
                   const message = (call.args as any).message;
                   const minutes = (call.args as any).minutes;
                   const ms = minutes * 60 * 1000;
+                  const reminderTime = new Date(Date.now() + ms);
+                  const formattedTime = reminderTime.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+                  
                   setTimeout(() => {
                     if ('Notification' in window && Notification.permission === 'granted') {
                       new Notification('VCB PoLYGoN Reminder', { body: message, icon: '/favicon.ico' });
@@ -1229,18 +1234,27 @@ ${globalRules}`;
                       alert(`Reminder: ${message}`);
                     }
                   }, ms);
-                  dispatchLog('success', 'Reminder Set', `In ${minutes} min: ${message}`);
+                  
+                  dispatchLog('success', 'Reminder Set', `At ${formattedTime}: ${message.substring(0, 30)}...`);
+                  
                   if ('Notification' in window && Notification.permission === 'default') {
                     Notification.requestPermission();
                   }
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Reminder set for ${minutes} minutes` } }] }));
+                  
+                  const timeDesc = minutes < 60 ? `${minutes} minutes` : `${Math.round(minutes/60)} hour${minutes >= 120 ? 's' : ''}`;
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `SUCCESS: Reminder set for ${timeDesc} from now (at ${formattedTime}). Message: "${message}". The user will receive a notification. Confirm this to the user.` } }] }));
                 } else if (call.name === 'send_sms') {
                   const phone = (call.args as any).phone_number || '';
                   const message = (call.args as any).message;
                   const smsUrl = `sms:${phone}${phone ? '?' : ''}body=${encodeURIComponent(message)}`;
                   window.location.href = smsUrl;
-                  dispatchLog('success', 'SMS Opened', `Message ready to send`);
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'SMS app opened' } }] }));
+                  dispatchLog('success', 'SMS Opened', `Message: ${message.substring(0, 30)}...`);
+                  const charCount = message.length;
+                  const smsCount = Math.ceil(charCount / 160);
+                  const feedback = phone 
+                    ? `SUCCESS: SMS app opened to send to ${phone}. Message (${charCount} chars, ${smsCount} SMS): "${message.substring(0, 50)}...". User can review and tap send.`
+                    : `SUCCESS: SMS app opened with message pre-filled (${charCount} chars, ${smsCount} SMS). User can select recipient and send.`;
+                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: feedback } }] }));
                 } else if (call.name === 'create_calendar_event') {
                   const title = (call.args as any).title;
                   const date = (call.args as any).date;
@@ -1282,7 +1296,7 @@ ${globalRules}`;
                       timestamp: Date.now()
                     };
                     
-                    dispatchLog('success', 'URL Content Fetched', `${text.length} chars`);
+                    dispatchLog('success', 'URL Content Fetched', `${text.length} chars from ${url.substring(0, 30)}...`);
                     
                     const summary = customInstruction 
                       ? `Content from ${url} (focusing on: ${customInstruction}):\n\n${text}`
@@ -1292,7 +1306,7 @@ ${globalRules}`;
                       functionResponses: [{ 
                         id: call.id, 
                         name: call.name, 
-                        response: { result: summary } 
+                        response: { result: `SUCCESS: Fetched ${text.length} characters from ${url}. Content summary:\n\n${text.substring(0, 1500)}${text.length > 1500 ? '...[truncated]' : ''}\n\nIMPORTANT: After summarizing this content for the user, proactively offer: \"Would you like me to email you this information?\"` } 
                       }] 
                     }));
                   } catch (error) {
@@ -1313,15 +1327,16 @@ ${globalRules}`;
                   };
                   if (navigator.share) {
                     navigator.share(shareData).then(() => {
-                      dispatchLog('success', 'Shared', 'Content shared successfully');
+                      dispatchLog('success', 'Shared', 'Content shared via native share');
                     }).catch(() => {
-                      dispatchLog('warn', 'Share Cancelled', 'User cancelled share');
+                      dispatchLog('warn', 'Share Cancelled', 'User cancelled share dialog');
                     });
+                    sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `SUCCESS: Native share dialog opened. User can choose how to share: \"${shareData.text.substring(0, 50)}...\"${shareData.url ? ` with link: ${shareData.url}` : ''}. Available options include WhatsApp, email, social media, etc.` } }] }));
                   } else {
                     navigator.clipboard.writeText(shareData.text + (shareData.url ? ` ${shareData.url}` : ''));
-                    dispatchLog('success', 'Copied', 'Content copied (share not supported)');
+                    dispatchLog('success', 'Copied for Sharing', 'Content copied (share not supported on this device)');
+                    sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Note: Native sharing not supported on this device. Content has been copied to clipboard instead. User can paste it anywhere with Ctrl+V.` } }] }));
                   }
-                  sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: 'Content shared' } }] }));
                 } else if (call.name === 'google_search' || call.name === 'google_maps') {
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
                   const query = (call.args as any).query || (call.args as any).location || 'N/A';
