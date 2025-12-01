@@ -125,7 +125,6 @@ export const ChatWidget: React.FC = () => {
   const isResizingRef = useRef(false);
   const [hoveredPersona, setHoveredPersona] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
-  const [autoConnectDone, setAutoConnectDone] = useState(false);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -182,15 +181,6 @@ export const ChatWidget: React.FC = () => {
       enableVision: enableVisionEnv,
       forcedModel: forcedModel
   });
-
-  useEffect(() => {
-    if (autoConnectDone) return;
-    
-    setUserEmail('test@example.com');
-    setIsOpen(true);
-    scheduleHeavy(() => connect());
-    setAutoConnectDone(true);
-  }, [autoConnectDone, connect]);
 
   const activeSubtitle = useMemo(() => getLastSentence(transcript), [transcript]);
 
