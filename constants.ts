@@ -9,6 +9,7 @@ import { thandiPersona } from './personas/thandi';
 import { leratoPersona } from './personas/lerato';
 import { nandiPersona } from './personas/nandi';
 import { lindiwePersona } from './personas/lindiwe';
+import { zamaPersona } from './personas/zama';
 
 export const AUDIO_CONFIG = { inputSampleRate: 16000, outputSampleRate: 24000 };
 
@@ -195,8 +196,20 @@ const PROMPT_CAMERA_SHARE_FUNC: FunctionDeclaration = {
   },
 };
 
+const REQUEST_LOCATION_FUNC: FunctionDeclaration = {
+  name: 'request_location',
+  description: 'Request user to share their GPS location when you need it for location-based services. Use when: user asks for nearby places, directions, local recommendations, weather, or any service that requires knowing where they are. Say warmly: "I\'d love to help you find that! Could you share your location with me?", "To give you the best recommendations, I need to know where you are - mind sharing your location?", "Let me find that for you - just need your location first!"',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      reason: { type: Type.STRING, description: 'Friendly reason for needing location - be helpful and explain why it will benefit them' }
+    },
+    required: ['reason'],
+  },
+};
+
 export const LIVE_API_TOOLS: Tool[] = [
-  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC, FETCH_URL_FUNC, PROMPT_SCREEN_SHARE_FUNC, PROMPT_CAMERA_SHARE_FUNC] },
+  { functionDeclarations: [LANGUAGE_FUNC, EMAIL_FUNC, QUERY_LRA_FUNC, OPEN_MAPS_FUNC, MAKE_CALL_FUNC, OPEN_WHATSAPP_FUNC, COPY_TO_CLIPBOARD_FUNC, SET_REMINDER_FUNC, SEND_SMS_FUNC, CREATE_CALENDAR_EVENT_FUNC, SHARE_CONTENT_FUNC, FETCH_URL_FUNC, PROMPT_SCREEN_SHARE_FUNC, PROMPT_CAMERA_SHARE_FUNC, REQUEST_LOCATION_FUNC] },
   { googleSearch: {} },
 ];
 
@@ -210,4 +223,5 @@ export const PERSONAS: Persona[] = [
   { ...leratoPersona, gender: 'Female', role: 'The Optimist', vibe: 'Radical Empathy', description: "The nation's therapist. Designed for wellness checks, comforting dialogue, and de-escalation scenarios.", icon: 'sun', maxDurationSeconds: 300, capabilities: ['Radical Empathy', 'Wellness', 'Comfort', 'Practical Advice'], voiceDescription: 'Melodic, Soft, Soothing' },
   { ...nandiPersona, gender: 'Female', role: 'The Trendsetter', vibe: 'Viral Sensation', description: 'The trendsetter. Use to test social media literacy, Gen-Z slang adaptability, and dramatic flair.', icon: 'sparkles', maxDurationSeconds: 300, capabilities: ['Pop Culture', 'Social Media', 'Trends', 'Gossip'], voiceDescription: 'Vocal Fry, Dramatic, Sassy' },
   { ...lindiwePersona, gender: 'Female', role: 'Support Agent', vibe: 'Patient Solver', description: 'The calm in the storm. Dedicated to resolving your technical issues and account queries with infinite patience.', icon: 'life-buoy', maxDurationSeconds: 300, capabilities: ['Tech Support', 'De-escalation', 'Problem Solving', 'Account Help'], voiceDescription: 'Calm, Warm, Reassuring' },
+  { ...zamaPersona, gender: 'Female', role: 'Visual Companion', vibe: 'Your Eyes, Your Friend', description: 'Camera-REQUIRED interactive companion. She sees YOU - your face, expressions, surroundings. Turn on your camera to engage!', icon: 'eye', maxDurationSeconds: 300, capabilities: ['Facial Expression Reading', 'Emotion Detection', 'Environment Analysis', 'Visual Curiosity'], voiceDescription: 'Warm, Observant, Playfully Curious', requiresCamera: true },
 ];

@@ -23,7 +23,7 @@ import { sendTranscriptEmail } from '../services/emailService';
 import { 
   X, Mic, MicOff, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe, Eye, Camera
 } from 'lucide-react';
 
 // --- VOICE UI KIT PRIMITIVES ---
@@ -40,6 +40,7 @@ const getPersonaIcon = (iconKey: string, size: number = 24, className: string = 
     case 'sparkles': return <Sparkles {...props} />;
     case 'life-buoy': return <LifeBuoy {...props} />;
     case 'scale': return <Scale {...props} />;
+    case 'eye': return <Eye {...props} />;
     default: return <User {...props} />;
   }
 };
@@ -699,6 +700,12 @@ export const ChatWidget: React.FC = () => {
                                 {isSelected && (
                                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
                                         <CheckCircle2 size={12} className="text-white" />
+                                    </div>
+                                )}
+                                
+                                {persona.requiresCamera && (
+                                    <div className="absolute -top-1 -left-1 w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center" title="Camera Required">
+                                        <Camera size={10} className="text-white" />
                                     </div>
                                 )}
                                 

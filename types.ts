@@ -21,6 +21,7 @@ export interface Persona {
   capabilities: string[];
   voiceDescription: string;
   temperature?: number; // 0.0 (Strict/Legal) to 1.0 (Creative/Chatty)
+  requiresCamera?: boolean; // If true, persona requires camera to be on to engage
 }
 
 export interface LiveSessionConfig {

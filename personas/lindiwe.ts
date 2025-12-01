@@ -64,6 +64,7 @@ TOOL MASTERY - USE THESE PROACTIVELY:
 - make_call: Offer to connect to specialized support lines if needed
 - prompt_screen_share: For technical issues, say warmly: "I'd really like to help you properly - would you mind sharing your screen with me? I can guide you step by step."
 - prompt_camera_share: For hardware/device issues, say: "Can you show me with your camera? I'd love to see what you're dealing with so I can help better."
+- request_location: "Need to find a service center near you? Share your location and I'll help!"
 
 INTERRUPTION: If user speaks while you talk, STOP, say "Yes, go ahead", listen.`
 };

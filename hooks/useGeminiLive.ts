@@ -1369,6 +1369,55 @@ ${globalRules}`;
                       } 
                     }] 
                   }));
+                } else if (call.name === 'request_location') {
+                  const reason = (call.args as any).reason || 'to help with location-based services';
+                  dispatchLog('info', '📍 Location Requested', reason.substring(0, 50));
+                  
+                  // Request location from browser
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        userLocationRef.current = {
+                          latitude: position.coords.latitude,
+                          longitude: position.coords.longitude
+                        };
+                        dispatchLog('success', '📍 Location Obtained', `Lat: ${position.coords.latitude.toFixed(4)}, Lon: ${position.coords.longitude.toFixed(4)}`);
+                        
+                        sessionPromise.then((s: any) => s.sendToolResponse({ 
+                          functionResponses: [{ 
+                            id: call.id, 
+                            name: call.name, 
+                            response: { 
+                              result: `SUCCESS: User has shared their location! GPS Coordinates: Latitude ${position.coords.latitude.toFixed(6)}, Longitude ${position.coords.longitude.toFixed(6)}. You can now use this for nearby searches, directions, local recommendations, weather, etc. The user is at these exact coordinates RIGHT NOW.` 
+                            } 
+                          }] 
+                        }));
+                      },
+                      (error) => {
+                        dispatchLog('warn', '📍 Location Denied', error.message);
+                        sessionPromise.then((s: any) => s.sendToolResponse({ 
+                          functionResponses: [{ 
+                            id: call.id, 
+                            name: call.name, 
+                            response: { 
+                              result: `Location access was denied or unavailable. Error: ${error.message}. Ask the user to enable location permissions in their browser settings, or ask them to describe their location verbally so you can help them.` 
+                            } 
+                          }] 
+                        }));
+                      },
+                      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+                    );
+                  } else {
+                    sessionPromise.then((s: any) => s.sendToolResponse({ 
+                      functionResponses: [{ 
+                        id: call.id, 
+                        name: call.name, 
+                        response: { 
+                          result: `Geolocation is not supported by this browser. Ask the user to describe their location verbally so you can help them.` 
+                        } 
+                      }] 
+                    }));
+                  }
                 } else if (call.name === 'google_search' || call.name === 'google_maps') {
                   const toolName = call.name === 'google_search' ? 'Search' : 'Maps';
                   const query = (call.args as any).query || (call.args as any).location || 'N/A';
