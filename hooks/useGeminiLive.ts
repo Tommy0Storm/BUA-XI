@@ -1676,6 +1676,8 @@ ${globalRules}`;
               // Policy violation - API key is leaked/revoked, MUST blacklist
               markKeyFailed(currentKey, `Close code 1008: API key leaked or revoked`);
               dispatchLog('error', 'API Key Revoked', 'This API key has been flagged as leaked. Rotating to next key...');
+              // CRITICAL: Clear sessionRef so retry can proceed
+              sessionRef.current = null;
               // Immediately retry with next key (don't wait for general retry logic)
               console.log('[1008 HANDLER] Blacklisted key, scheduling retry in 500ms');
               console.log('[1008 HANDLER] connectRef.current exists:', !!connectRef.current);
@@ -1715,6 +1717,7 @@ ${globalRules}`;
                 dispatchLog('warn','Model Compatibility', `Detected model incompatible for bidiGenerateContent: ${chosenModel}. This project expects the native-audio model 'gemini-2.5-flash-native-audio-preview-09-2025'. Reason: ${reason}`);
                 // Prevent retry loops — attempt a single fallback for this attempt
                 try { sessionOpenTimeRef.current = null; } catch {}
+                sessionRef.current = null; // CRITICAL: Clear session ref so retry can proceed
                 const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
                 retryCountRef.current += 1;
                 stopAudio();
@@ -1741,6 +1744,7 @@ ${globalRules}`;
                 }
               } catch (err) {}
               sessionOpenTimeRef.current = null;
+              sessionRef.current = null; // CRITICAL: Clear session ref so retry can proceed
               const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
               retryCountRef.current += 1;
               dispatchLog('warn', 'Connection Lost', `Auto-reconnecting in ${backoff}ms...`);
