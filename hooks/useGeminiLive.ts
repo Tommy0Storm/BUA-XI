@@ -1870,6 +1870,8 @@ ${globalRules}`;
       workletNode.port.onmessage = (e) => {
         if (e.data.type !== 'audio') return;
         if (!isConnectedRef.current) return;
+        // CRITICAL: Don't send audio during warmup period - native audio model is sensitive
+        if (!safeToSpeakRef.current) return;
         
         const pcm = e.data.data;
         const { rms } = e.data;
