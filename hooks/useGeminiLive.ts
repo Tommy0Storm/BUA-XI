@@ -1676,6 +1676,11 @@ ${globalRules}`;
               // Policy violation - API key is leaked/revoked, MUST blacklist
               markKeyFailed(currentKey, `Close code 1008: API key leaked or revoked`);
               dispatchLog('error', 'API Key Revoked', 'This API key has been flagged as leaked. Rotating to next key...');
+              // Immediately retry with next key (don't wait for general retry logic)
+              const backoff = 500; // Quick retry since it's just a bad key
+              stopAudio();
+              setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoff);
+              return; // Exit early - don't run other onclose logic
             }
             
             if (!isIntentionalDisconnectRef.current) {
