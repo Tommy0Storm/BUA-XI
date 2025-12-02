@@ -933,6 +933,7 @@ ${userEmailContext}
 ${globalRules}`;
 
       console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
+      dispatchLog('info', 'Connecting', `Model: ${chosenModel.split('/').pop()}`);
       const sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
@@ -1710,10 +1711,23 @@ ${globalRules}`;
 
       sessionRef.current = sessionPromise;
       
-      // Log if session promise rejects
-      sessionPromise.catch((err: any) => {
+      // Log session promise resolution/rejection for debugging
+      sessionPromise.then((session: any) => {
+        console.log('[SESSION] Promise resolved - session object:', typeof session, session ? 'exists' : 'null');
+        dispatchLog('info', 'Session Ready', 'WebSocket connection established');
+      }).catch((err: any) => {
         console.error('[SESSION] Promise rejected:', err);
         dispatchLog('error', 'Session Failed', String(err));
+        // Mark key as failed if it's an auth issue and trigger retry
+        const errMsg = String(err?.message || err);
+        if (/401|403|leaked|unauthor|api key/i.test(errMsg)) {
+          markKeyFailed(currentKey);
+          dispatchLog('warn', 'API Key', 'Blacklisting failed key and retrying...');
+          const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
+          retryCountRef.current += 1;
+          stopAudio();
+          setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoff);
+        }
       });
 
       // Setup AudioWorklet message handler (RMS normalization done in worklet)
