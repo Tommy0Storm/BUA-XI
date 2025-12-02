@@ -1,4 +1,4 @@
-// hooks/useGeminiLive.ts
+// hooks/useGeminiLive.ts - v2.1 Enhanced email with AI spoken content
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
 import { createGeminiClientOptions, MODELS, AUDIO_INPUT, AUDIO_OUTPUT, DEFAULT_LIVE_CONFIG } from '../gemini.config';
