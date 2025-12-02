@@ -1618,12 +1618,17 @@ ${globalRules}`;
             }
           },
           onclose: (e: any) => {
+            console.error('[ONCLOSE] WebSocket closed!', { code: e?.code, reason: e?.reason, wasClean: e?.wasClean });
             // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
             if (frameIntervalRef.current) {
               clearInterval(frameIntervalRef.current);
               frameIntervalRef.current = null;
             }
             isConnectedRef.current = false; // Stop all sending immediately
+            
+            // Check if onopen ever fired
+            const onopenFired = sessionOpenTimeRef.current !== null;
+            console.error('[ONCLOSE] onopen had fired:', onopenFired, 'sessionOpenTime:', sessionOpenTimeRef.current);
             
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
