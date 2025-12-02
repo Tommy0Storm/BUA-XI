@@ -1680,14 +1680,16 @@ ${globalRules}`;
               console.log('[1008 HANDLER] Blacklisted key, scheduling retry in 500ms');
               console.log('[1008 HANDLER] connectRef.current exists:', !!connectRef.current);
               stopAudio();
-              setTimeout(() => {
+              setTimeout(async () => {
                 console.log('[1008 RETRY] Attempting reconnect with next key...');
-                if (connectRef.current) {
-                  connectRef.current(true);
-                } else {
-                  console.error('[1008 RETRY] connectRef.current is null! Cannot retry.');
-                  // Fallback: call connect directly if ref not set
-                  connect(true);
+                try {
+                  if (connectRef.current) {
+                    await connectRef.current(true);
+                  } else {
+                    console.error('[1008 RETRY] connectRef.current is null! Cannot retry.');
+                  }
+                } catch (retryErr) {
+                  console.error('[1008 RETRY] Error during retry:', retryErr);
                 }
               }, 500);
               return; // Exit early - don't run other onclose logic
