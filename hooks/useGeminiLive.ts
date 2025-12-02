@@ -1677,9 +1677,19 @@ ${globalRules}`;
               markKeyFailed(currentKey, `Close code 1008: API key leaked or revoked`);
               dispatchLog('error', 'API Key Revoked', 'This API key has been flagged as leaked. Rotating to next key...');
               // Immediately retry with next key (don't wait for general retry logic)
-              const backoff = 500; // Quick retry since it's just a bad key
+              console.log('[1008 HANDLER] Blacklisted key, scheduling retry in 500ms');
+              console.log('[1008 HANDLER] connectRef.current exists:', !!connectRef.current);
               stopAudio();
-              setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoff);
+              setTimeout(() => {
+                console.log('[1008 RETRY] Attempting reconnect with next key...');
+                if (connectRef.current) {
+                  connectRef.current(true);
+                } else {
+                  console.error('[1008 RETRY] connectRef.current is null! Cannot retry.');
+                  // Fallback: call connect directly if ref not set
+                  connect(true);
+                }
+              }, 500);
               return; // Exit early - don't run other onclose logic
             }
             
