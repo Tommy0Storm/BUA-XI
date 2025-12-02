@@ -942,8 +942,13 @@ ${userEmailContext}
 ${globalRules}`;
 
       console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
+      console.log('[CONNECT] API key preview:', currentKey.substring(0, 10) + '...');
+      console.log('[CONNECT] Voice config:', personaRef.current.voiceName);
       dispatchLog('info', 'Connecting', `Model: ${chosenModel.split('/').pop()}`);
-      const sessionPromise = ai.live.connect({
+      
+      let sessionPromise: Promise<any>;
+      try {
+        sessionPromise = ai.live.connect({
         model: chosenModel,
         config: {
           responseModalities: [Modality.AUDIO],
@@ -1715,6 +1720,12 @@ ${globalRules}`;
           }
         }
       });
+        console.log('[CONNECT] ai.live.connect() returned promise');
+      } catch (connectErr: any) {
+        console.error('[CONNECT] ai.live.connect() threw synchronously:', connectErr);
+        dispatchLog('error', 'Connect Error', String(connectErr?.message || connectErr));
+        throw connectErr;
+      }
 
       sessionRef.current = sessionPromise;
       
