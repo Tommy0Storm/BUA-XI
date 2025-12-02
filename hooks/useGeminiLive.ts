@@ -1613,6 +1613,109 @@ ${globalRules}`;
             } catch (err) {
               dispatchLog('error', 'DEBUG onmessage', `Handler error: ${String(err)} - swallowed`);
             }
+          },
+          onclose: (e: any) => {
+            // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
+            if (frameIntervalRef.current) {
+              clearInterval(frameIntervalRef.current);
+              frameIntervalRef.current = null;
+            }
+            isConnectedRef.current = false; // Stop all sending immediately
+            
+            if (!isIntentionalDisconnectRef.current) {
+              // log close details for diagnosis
+              try { dispatchLog('info', 'DEBUG onclose', `code:${e?.code ?? 'n/a'} reason:${e?.reason ?? 'n/a'}`); } catch(e){}
+              // If the connection opened then closed very quickly, it could be
+              // - an unsupported model (e.g. native audio model not supporting bidiGenerateContent)
+              // - or an auth/permission issue. We must treat these differently.
+              const openTs = sessionOpenTimeRef.current;
+              const now = Date.now();
+              const reason = String(e?.reason || '');
+              const codeMsg = String(e?.code || '');
+
+              // Detect explicit model-not-found / unsupported bidiGenerateContent cases
+              const modelUnsupported = /not found for API version|not supported for bidiGenerateContent|is not found|unsupported modality/i.test(reason + ' ' + codeMsg);
+
+              // If we failed quickly AND the reason suggests the model doesn't support bidiGenerateContent
+              // then this is NOT a key/auth problem — attempt a fallback to a compatible multimodal model
+              if (openTs && now - openTs < 3000 && modelUnsupported) {
+                dispatchLog('warn','Model Compatibility', `Detected model incompatible for bidiGenerateContent: ${chosenModel}. This project expects the native-audio model 'gemini-2.5-flash-native-audio-preview-09-2025'. Reason: ${reason}`);
+                // Prevent retry loops — attempt a single fallback for this attempt
+                try { sessionOpenTimeRef.current = null; } catch {}
+                const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
+                retryCountRef.current += 1;
+                stopAudio();
+                // Do not switch to different models; retry with the same chosenModel after a backoff.
+                setTimeout(() => { if (connectRef.current) connectRef.current(true, chosenModel); }, backoff);
+                return; // skip blacklisting for incompatible-model cases
+              }
+
+              // For other quick failures, check if they indicate auth/perms and blacklist only on auth-like errors
+              if (openTs && now - openTs < 3000) {
+                // close reason suggests something else — only blacklist for auth/permission errors
+                if (/401|403|api key|unauthor|leaked/i.test(reason + ' ' + codeMsg)) {
+                  try { markKeyFailed(currentKey); dispatchLog('warn','API Key','Session opened & closed quickly — blacklisting key due to auth/permission/leak.'); } catch(e){}
+                } else {
+                  // quick close but not auth — do not mark key failed, retry with backoff using same key
+                  dispatchLog('warn','Connection Lost','Session opened & closed quickly — retrying without blacklisting.');
+                }
+              }
+
+              // If the close reason contains explicit auth errors, blacklist the key
+              try {
+                if (/401|403|api key|invalid key|quota|leaked/i.test(reason + ' ' + codeMsg)) {
+                  markKeyFailed(currentKey);
+                  dispatchLog('warn', 'API Key', `Close reason indicates auth failure — blacklisted key index ${currentKeyIndexRef.current}`);
+                }
+              } catch (err) {}
+              sessionOpenTimeRef.current = null;
+              const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
+              retryCountRef.current += 1;
+              dispatchLog('warn', 'Connection Lost', `Auto-reconnecting in ${backoff}ms...`);
+              stopAudio();
+              setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoff);
+            }
+          },
+          onerror: (err: any) => {
+            // CRITICAL: Immediately stop video frame loop and all sending
+            if (frameIntervalRef.current) {
+              clearInterval(frameIntervalRef.current);
+              frameIntervalRef.current = null;
+            }
+            isConnectedRef.current = false;
+            // Enhanced error classification based on Context7 ApiError patterns
+            const errMsg = String(err?.message || err || '');
+            const errStatus = err?.status || (errMsg.match(/\b(4\d{2}|5\d{2})\b/)?.[0] ?? null);
+            
+            dispatchLog('error', 'Session Error', `Status: ${errStatus || 'unknown'} - ${errMsg.slice(0, 150)}`);
+            
+            try {
+              // Classify error by status code pattern
+              if (errStatus === '401' || errStatus === '403' || /api key|invalid key|unauthor|permission|leaked/i.test(errMsg)) {
+                // Authentication/Permission error - blacklist key
+                markKeyFailed(currentKey);
+                dispatchLog('warn', 'API Key', `Auth failure (${errStatus}) — blacklisted key index ${currentKeyIndexRef.current}`);
+              } else if (errStatus === '429' || /rate limit|quota exceeded|too many requests/i.test(errMsg)) {
+                // Rate limit - exponential backoff, don't blacklist key permanently
+                const backoffMs = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000); // Cap at 30s for rate limits
+                dispatchLog('warn', 'Rate Limited', `Too many requests. Backing off ${backoffMs}ms...`);
+                retryCountRef.current += 1;
+                stopAudio();
+                setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoffMs);
+              } else if (errStatus === '404' || /not found for API version|not supported for bidiGenerateContent|unsupported modality/i.test(errMsg)) {
+                // Model incompatibility - not a key problem
+                dispatchLog('warn', 'Model Compatibility', `Model '${chosenModel}' incompatible. Expected: 'gemini-2.5-flash-native-audio-preview-09-2025'`);
+              } else if (errStatus === '400' || /invalid|bad request|malformed/i.test(errMsg)) {
+                // Invalid request - log for debugging
+                dispatchLog('error', 'Invalid Request', `Bad request params: ${errMsg.slice(0, 100)}`);
+              } else if (/network|timeout|connection/i.test(errMsg)) {
+                // Network error - retry without blacklisting
+                dispatchLog('warn', 'Network Error', 'Connection issue - will retry...');
+              }
+            } catch (e) {
+              // Error handling itself failed - log and continue
+              console.warn('[ERROR HANDLER] Exception in error handler:', e);
+            }
           }
         }
       });
