@@ -1026,18 +1026,6 @@ ${globalRules}`;
               }).catch(() => {});
             }
           },
-          onclose: (event: any) => {
-             console.warn('[SESSION] onClose:', event);
-             isConnectedRef.current = false;
-             setStatus('disconnected');
-             dispatchLog('warn', 'Session Closed', `Code: ${event?.code}, Reason: ${event?.reason || 'Unknown'}`);
-             stopAudio();
-          },
-          onerror: (error: any) => {
-             console.error('[SESSION] onError:', error);
-             dispatchLog('error', 'Session Error', String(error?.message || error));
-             // Don't necessarily disconnect on error, but log it
-          },
           onmessage: async (msg: LiveServerMessage) => {
             if (connectionIdRef.current !== myConnectionId) return;
             try {
