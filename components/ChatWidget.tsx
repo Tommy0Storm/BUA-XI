@@ -6,7 +6,7 @@ import { sendTranscriptEmail } from '../services/emailService';
 import { 
   X, Mic, MicOff, LogOut, 
   Briefcase, Zap, Scroll, Target, Sun, Sparkles, User, ChevronRight, Play, BarChart2,
-  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe, Eye, Camera
+  AlertCircle, LifeBuoy, ArrowUpRight, Captions, CheckCircle2, Scale, Mail, Hand, Video, VideoOff, Globe, Eye, Camera, Monitor, MessageCircle, MapPin
 } from 'lucide-react';
 
 // Prevent HMR from remounting this widget and killing sessions
@@ -614,7 +614,7 @@ export const ChatWidget: React.FC = () => {
             <div className="bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 max-w-sm">
               <div className="font-bold text-sm mb-1">{persona.name} - {persona.role}</div>
               <div className="text-gray-300 text-xs mb-2">{persona.description}</div>
-              <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+              <div className="flex items-center gap-3 pt-2 border-t border-white/10 flex-wrap">
                 <div className="flex items-center gap-1 text-[10px] text-gray-400">
                   <Globe size={12} className="text-emerald-400" />
                   <span>Search</span>
@@ -626,6 +626,18 @@ export const ChatWidget: React.FC = () => {
                 <div className="flex items-center gap-1 text-[10px] text-gray-400">
                   <Video size={12} className="text-purple-400" />
                   <span>Vision</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <Monitor size={12} className="text-cyan-400" />
+                  <span>Screen Share</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <MessageCircle size={12} className="text-green-400" />
+                  <span>WhatsApp</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <MapPin size={12} className="text-red-400" />
+                  <span>Maps</span>
                 </div>
               </div>
             </div>
