@@ -192,10 +192,39 @@ export const sendGenericEmail = async (
     const now = new Date();
     const dateTime = now.toLocaleString('en-ZA', { dateStyle: 'full', timeStyle: 'long' });
     
-    const linksSection = links.length > 0 ? `
+    // Check if body contains Google Maps URL and enhance it
+    let enhancedBodyHtml = bodyHtml;
+    const mapsUrlMatch = bodyHtml.match(/https:\/\/www\.google\.com\/maps\/dir\/[^\s<"]+/);
+    if (mapsUrlMatch) {
+        const mapsUrl = mapsUrlMatch[0];
+        const mapsButton = `
+        <div style="margin: 20px 0; text-align: center;">
+            <a href="${mapsUrl}" style="display: inline-block; background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: #fff; text-decoration: none; padding: 15px 30px; border-radius: 10px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4);" target="_blank">
+                🗺️ Open Directions in Google Maps
+            </a>
+        </div>`;
+        // Add the button after the URL
+        enhancedBodyHtml = enhancedBodyHtml.replace(mapsUrl, mapsUrl + mapsButton);
+    }
+    
+    // Filter out links that are already rendered as buttons in the body
+    // This prevents duplicate maps/whatsapp buttons
+    const filteredLinks = links.filter(link => {
+        // If the body already contains this maps link with a button, skip it
+        if (link.includes('google.com/maps') && bodyHtml.includes(link)) {
+            return false;
+        }
+        // Skip WhatsApp links if already in body
+        if (link.includes('wa.me') && bodyHtml.includes(link)) {
+            return false;
+        }
+        return true;
+    });
+    
+    const linksSection = filteredLinks.length > 0 ? `
         <div style="margin-top: 20px; padding: 15px; background-color: #0a0a0a; border: 1px solid #444; border-radius: 4px;">
             <p style="margin: 0 0 10px 0; font-size: 12px; color: #888; font-weight: 600;">🔗 SOURCES & REFERENCES</p>
-            ${links.map(link => {
+            ${filteredLinks.map(link => {
                 // Check if it's a Google Maps link - render as a button
                 if (link.includes('google.com/maps')) {
                     return `
@@ -220,21 +249,6 @@ export const sendGenericEmail = async (
             }).join('')}
         </div>
     ` : '';
-    
-    // Check if body contains Google Maps URL and enhance it
-    let enhancedBodyHtml = bodyHtml;
-    const mapsUrlMatch = bodyHtml.match(/https:\/\/www\.google\.com\/maps\/dir\/[^\s<"]+/);
-    if (mapsUrlMatch) {
-        const mapsUrl = mapsUrlMatch[0];
-        const mapsButton = `
-        <div style="margin: 20px 0; text-align: center;">
-            <a href="${mapsUrl}" style="display: inline-block; background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: #fff; text-decoration: none; padding: 15px 30px; border-radius: 10px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4);" target="_blank">
-                🗺️ Open Directions in Google Maps
-            </a>
-        </div>`;
-        // Add the button after the URL
-        enhancedBodyHtml = enhancedBodyHtml.replace(mapsUrl, mapsUrl + mapsButton);
-    }
     
     const wrappedBody = template === 'legal' ? `
     <div style="background-color: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 20px; width: 100%; box-sizing: border-box;">
