@@ -37,7 +37,9 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # This injects the secret API_KEY from GitHub Settings -> Secrets and variables -> Actions
+          # API Keys: supports multiple comma-separated keys for rotation (VITE_API_KEYS)
+          # Fallback: single key (VITE_API_KEY) for backwards compatibility
+          VITE_API_KEYS: ${{ secrets.API_KEYS }}
           VITE_API_KEY: ${{ secrets.API_KEY }}
           # Inject EmailJS Secrets
           VITE_EMAILJS_SERVICE_ID: ${{ secrets.EMAILJS_SERVICE_ID }}
