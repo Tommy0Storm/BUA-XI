@@ -195,9 +195,46 @@ export const sendGenericEmail = async (
     const linksSection = links.length > 0 ? `
         <div style="margin-top: 20px; padding: 15px; background-color: #0a0a0a; border: 1px solid #444; border-radius: 4px;">
             <p style="margin: 0 0 10px 0; font-size: 12px; color: #888; font-weight: 600;">🔗 SOURCES & REFERENCES</p>
-            ${links.map(link => `<a href="${sanitizeHtml(link)}" style="display: block; color: #4a9eff; text-decoration: none; margin: 5px 0; font-size: 14px; word-break: break-all;" target="_blank">${sanitizeHtml(link)}</a>`).join('')}
+            ${links.map(link => {
+                // Check if it's a Google Maps link - render as a button
+                if (link.includes('google.com/maps')) {
+                    return `
+                    <div style="margin: 15px 0;">
+                        <a href="${sanitizeHtml(link)}" style="display: inline-block; background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; text-align: center;" target="_blank">
+                            🗺️ Open in Google Maps
+                        </a>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #888;">Click to open directions in Google Maps</p>
+                    </div>`;
+                }
+                // Check if it's a WhatsApp link
+                if (link.includes('wa.me')) {
+                    return `
+                    <div style="margin: 15px 0;">
+                        <a href="${sanitizeHtml(link)}" style="display: inline-block; background: #25D366; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; text-align: center;" target="_blank">
+                            💬 Open WhatsApp Chat
+                        </a>
+                    </div>`;
+                }
+                // Default link styling
+                return `<a href="${sanitizeHtml(link)}" style="display: block; color: #4a9eff; text-decoration: none; margin: 5px 0; font-size: 14px; word-break: break-all;" target="_blank">${sanitizeHtml(link)}</a>`;
+            }).join('')}
         </div>
     ` : '';
+    
+    // Check if body contains Google Maps URL and enhance it
+    let enhancedBodyHtml = bodyHtml;
+    const mapsUrlMatch = bodyHtml.match(/https:\/\/www\.google\.com\/maps\/dir\/[^\s<"]+/);
+    if (mapsUrlMatch) {
+        const mapsUrl = mapsUrlMatch[0];
+        const mapsButton = `
+        <div style="margin: 20px 0; text-align: center;">
+            <a href="${mapsUrl}" style="display: inline-block; background: linear-gradient(135deg, #4285F4 0%, #34A853 100%); color: #fff; text-decoration: none; padding: 15px 30px; border-radius: 10px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 15px rgba(66, 133, 244, 0.4);" target="_blank">
+                🗺️ Open Directions in Google Maps
+            </a>
+        </div>`;
+        // Add the button after the URL
+        enhancedBodyHtml = enhancedBodyHtml.replace(mapsUrl, mapsUrl + mapsButton);
+    }
     
     const wrappedBody = template === 'legal' ? `
     <div style="background-color: #1a1a2e; color: #eee; font-family: 'Segoe UI', sans-serif; padding: 20px; width: 100%; box-sizing: border-box;">
@@ -214,7 +251,7 @@ export const sendGenericEmail = async (
                 <p style="margin: 0; font-size: 13px; color: #a0a0a0; font-weight: 600;">📋 LEGAL ANALYSIS</p>
             </div>
             <div style="line-height: 1.8; font-size: 16px; color: #e0e0e0;">
-                ${bodyHtml}
+                ${enhancedBodyHtml}
             </div>
             ${linksSection}
             <div style="margin-top: 30px; padding: 15px; background-color: #0f3460; border-radius: 4px; border: 1px solid #667eea;">
@@ -238,7 +275,7 @@ export const sendGenericEmail = async (
         </div>
         <h2 style="color: #fff; border-bottom: 1px solid #555; padding-bottom: 10px;">Message from ${sanitizeHtml(agentName)}</h2>
         <div style="margin-top: 20px; line-height: 1.6; font-size: 16px;">
-            ${bodyHtml}
+            ${enhancedBodyHtml}
         </div>
         ${linksSection}
         <div style="margin-top: 40px; text-align: center; border-top: 1px solid #333; padding-top: 15px;">

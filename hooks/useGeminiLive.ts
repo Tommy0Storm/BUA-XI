@@ -177,7 +177,8 @@ export function useGeminiLive({
   const playedChunksRef = useRef<Set<string>>(new Set());
   const visionTopicsRef = useRef<Set<string>>(new Set());
   const lastVisionEmailRef = useRef<number>(0);
-  const searchResultsRef = useRef<Array<{query: string; tool: string; timestamp: number}>>([]);
+  const searchResultsRef = useRef<Array<{query: string; tool: string; timestamp: number; results?: string}>>([]);
+  const groundingChunksRef = useRef<Array<{title: string; uri: string; content: string; timestamp: number}>>([]);
   const lastMapsDestinationRef = useRef<{destination: string; mode: string; timestamp: number} | null>(null);
   const conversationContextRef = useRef<{lastTopic: string; lastResponse: string; timestamp: number} | null>(null);
   const fetchedUrlContentRef = useRef<{url: string; content: string; timestamp: number} | null>(null);
@@ -1198,10 +1199,40 @@ ${globalRules}`;
                     outputLength: serverContent.outputTranscription?.text?.length ?? 0,
                     inputLength: serverContent.inputTranscription?.text?.length ?? 0,
                     modelTurnParts: (serverContent.modelTurn?.parts?.length ?? 0),
-                    interrupted: Boolean(serverContent.interrupted)
+                    interrupted: Boolean(serverContent.interrupted),
+                    hasGrounding: Boolean(serverContent.groundingMetadata)
                   };
                   dispatchLog('info', 'DEBUG serverContent', JSON.stringify(summary));
                 } catch (e) {}
+              }
+              
+              // Capture Google Search grounding metadata (search results)
+              if (serverContent.groundingMetadata?.groundingChunks) {
+                for (const chunk of serverContent.groundingMetadata.groundingChunks) {
+                  if (chunk.web) {
+                    groundingChunksRef.current.push({
+                      title: chunk.web.title || 'Search Result',
+                      uri: chunk.web.uri || '',
+                      content: chunk.web.title || '', // Gemini doesn't always include content snippet
+                      timestamp: Date.now()
+                    });
+                  }
+                }
+                // Also check for searchEntryPoint which contains rendered search results
+                const searchEntry = serverContent.groundingMetadata.searchEntryPoint;
+                if (searchEntry?.renderedContent) {
+                  // Store the rendered HTML content (can be parsed for email)
+                  dispatchLog('info', 'Search Results', `Captured ${serverContent.groundingMetadata.groundingChunks.length} results`);
+                }
+                // Check for grounding supports (which contain text segments with source attribution)
+                if (serverContent.groundingMetadata.groundingSupports) {
+                  for (const support of serverContent.groundingMetadata.groundingSupports) {
+                    if (support.segment?.text && support.groundingChunkIndices?.length) {
+                      // This links specific text segments to their source chunks
+                      if (verbose) dispatchLog('info', 'Grounding', `"${support.segment.text.substring(0,50)}..." from ${support.groundingChunkIndices.length} sources`);
+                    }
+                  }
+                }
               }
               
               // Log if we're getting input transcription (proves audio is being processed)
@@ -1291,28 +1322,76 @@ ${globalRules}`;
                     // BULLETPROOF EMAIL LOGIC - Build comprehensive email from all available context
                     const emailParts: string[] = [];
                     
-                    // 1. Include AI's provided body first
-                    if (body && body.length > 5) {
+                    // 0. CRITICAL: Capture AI's current/recent output - this IS the content the user asked for!
+                    // When send_email is called, the AI has likely just finished providing info verbally
+                    const currentAiOutput = currentOutputTranscriptionRef.current.trim();
+                    const recentConversation = conversationContextRef.current;
+                    
+                    // Use the most recent AI output as primary content source
+                    if (currentAiOutput.length > 50) {
+                      emailParts.push(`📋 **Here's the information you requested:**\n\n${currentAiOutput}`);
+                      emailParts.push('\n---\n');
+                      dispatchLog('info', 'Email Enhanced', `Added current AI output (${currentAiOutput.length} chars)`);
+                    } else if (recentConversation && Date.now() - recentConversation.timestamp < 120000 && recentConversation.lastResponse.length > 50) {
+                      // Fallback to last completed turn
+                      emailParts.push(`📋 **Here's the information you requested:**\n\n${recentConversation.lastResponse}`);
+                      emailParts.push('\n---\n');
+                      dispatchLog('info', 'Email Enhanced', `Added last response (${recentConversation.lastResponse.length} chars)`);
+                    }
+                    
+                    // 1. Include AI's provided body (if it adds anything meaningful beyond what we captured)
+                    if (body && body.length > 20 && !currentAiOutput.includes(body) && body !== subject) {
                       emailParts.push(body);
                       emailParts.push('\n---\n');
                     }
                     
                     // 2. Add recent maps/directions if available (within 2 minutes)
-                    const recentMaps = lastMapsDestinationRef.current;
+                    const recentMaps = lastMapsDestinationRef.current as any;
                     if (recentMaps && Date.now() - recentMaps.timestamp < 120000) {
-                      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(recentMaps.destination)}&travelmode=${recentMaps.mode}`;
-                      emailParts.push(`📍 DIRECTIONS\nDestination: ${recentMaps.destination}\nTravel Mode: ${recentMaps.mode}\n\nGoogle Maps Link:\n${mapsUrl}\n`);
+                      const mapsUrl = recentMaps.mapsUrl || `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(recentMaps.destination)}&travelmode=${recentMaps.mode}`;
+                      
+                      // Build a nice maps section with embedded map preview
+                      const userLoc = userLocationRef.current;
+                      let mapsSection = `📍 DIRECTIONS\n\n`;
+                      mapsSection += `**Destination:** ${recentMaps.destination}\n`;
+                      mapsSection += `**Travel Mode:** ${recentMaps.mode}\n`;
+                      if (userLoc) {
+                        mapsSection += `**From Your Location:** ${userLoc.latitude.toFixed(4)}, ${userLoc.longitude.toFixed(4)}\n`;
+                      }
+                      mapsSection += `\n🗺️ **Click to Open in Google Maps:**\n${mapsUrl}\n`;
+                      
+                      // Add Google Maps embed link (clickable image in email)
+                      // Note: Static Maps API requires API key - using embed URL instead which works without key
+                      const embedUrl = `https://www.google.com/maps/embed/v1/directions?key=&origin=${userLoc ? `${userLoc.latitude},${userLoc.longitude}` : 'current+location'}&destination=${encodeURIComponent(recentMaps.destination)}&mode=${recentMaps.mode}`;
+                      mapsSection += `\n[View Interactive Map](${mapsUrl})\n`;
+                      
+                      emailParts.push(mapsSection);
                       if (!subject.toLowerCase().includes('direction')) {
                         subject = `Directions: ${recentMaps.destination}`;
                       }
-                      dispatchLog('info', 'Email Enhanced', 'Added maps directions');
+                      dispatchLog('info', 'Email Enhanced', 'Added maps directions with preview');
                     }
                     
-                    // 3. Add recent search context if available (within 2 minutes)
+                    // 3. Add recent search results if available (within 2 minutes)
                     const recentSearches = searchResultsRef.current.filter(s => Date.now() - s.timestamp < 120000);
-                    if (recentSearches.length > 0) {
-                      emailParts.push(`\n🔍 SEARCH QUERIES\n${recentSearches.map(s => `- ${s.tool}: ${s.query}`).join('\n')}\n`);
-                      dispatchLog('info', 'Email Enhanced', `Added ${recentSearches.length} search queries`);
+                    const recentGrounding = groundingChunksRef.current.filter(g => Date.now() - g.timestamp < 120000);
+                    
+                    if (recentSearches.length > 0 || recentGrounding.length > 0) {
+                      emailParts.push(`\n🔍 SEARCH RESULTS\n`);
+                      
+                      // Add grounding chunks (actual search result content)
+                      if (recentGrounding.length > 0) {
+                        recentGrounding.forEach(g => {
+                          emailParts.push(`\n**${g.title}**\n${g.content}\n${g.uri}\n`);
+                        });
+                      }
+                      
+                      // Add search queries as reference
+                      if (recentSearches.length > 0) {
+                        emailParts.push(`\nQueries: ${recentSearches.map(s => s.query).join(', ')}\n`);
+                      }
+                      
+                      dispatchLog('info', 'Email Enhanced', `Added ${recentGrounding.length} search results, ${recentSearches.length} queries`);
                     }
                     
                     // 4. Add fetched URL content if available (within 2 minutes)
@@ -1322,12 +1401,7 @@ ${globalRules}`;
                       dispatchLog('info', 'Email Enhanced', 'Added fetched URL content');
                     }
                     
-                    // 5. Add recent conversation context (within 2 minutes)
-                    const recentContext = conversationContextRef.current;
-                    if (recentContext && Date.now() - recentContext.timestamp < 120000 && recentContext.lastResponse.length > 50) {
-                      emailParts.push(`\n💬 CONVERSATION SUMMARY\nTopic: ${recentContext.lastTopic}\n\nResponse:\n${recentContext.lastResponse}\n`);
-                      dispatchLog('info', 'Email Enhanced', 'Added conversation context');
-                    }
+                    // 5. (Handled in step 0 above - current AI output captures this)
                     
                     // 6. Add user location if available
                     if (userLocationRef.current) {
@@ -1404,15 +1478,41 @@ ${globalRules}`;
                   const destination = (call.args as any).destination || '';
                   const mode = (call.args as any).mode || 'driving';
                   
-                  // Store the destination for potential email follow-up
+                  // Build URLs
+                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
+                  
+                  // Build Google Maps Static Image URL (for email embedding)
+                  // Using user's location if available, otherwise just show destination
+                  const userLoc = userLocationRef.current;
+                  let staticMapUrl = '';
+                  if (userLoc) {
+                    // Show route from user location to destination
+                    staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=600x300&markers=color:green|label:A|${userLoc.latitude},${userLoc.longitude}&markers=color:red|label:B|${encodeURIComponent(destination)}&path=color:0x0000ff|weight:3|${userLoc.latitude},${userLoc.longitude}|${encodeURIComponent(destination)}&key=`;
+                  } else {
+                    // Just show destination marker
+                    staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=600x300&zoom=15&markers=color:red|${encodeURIComponent(destination)}&key=`;
+                  }
+                  
+                  // Store the destination for potential email follow-up (including static map URL)
                   lastMapsDestinationRef.current = {
                     destination,
                     mode,
-                    timestamp: Date.now()
-                  };
+                    timestamp: Date.now(),
+                    mapsUrl,
+                    staticMapUrl
+                  } as any;
                   
-                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
-                  window.open(mapsUrl, '_blank');
+                  // Try to open maps - use location.href as fallback for mobile
+                  try {
+                    const newWindow = window.open(mapsUrl, '_blank');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                      // Popup was blocked, try location.href instead
+                      dispatchLog('warn', 'Maps', 'Popup blocked, using direct navigation');
+                      window.location.href = mapsUrl;
+                    }
+                  } catch (e) {
+                    window.location.href = mapsUrl;
+                  }
                   dispatchLog('success', 'Maps Opened', `${mode} directions to: ${destination}`);
                   
                   // Return detailed response with email offer prompt
@@ -1433,11 +1533,26 @@ ${globalRules}`;
                   dispatchLog('success', 'Call Initiated', `Calling: ${name} (${phone})`);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Phone dialer opened to call ${name} at ${phone}. The user can now tap to dial.` } }] }));
                 } else if (call.name === 'open_whatsapp') {
-                  const phone = (call.args as any).phone_number;
+                  const phone = (call.args as any).phone_number?.replace(/\+/g, '') || '';
                   const message = (call.args as any).message || '';
                   const messageParam = message ? `?text=${encodeURIComponent(message)}` : '';
+                  
+                  // WhatsApp URL - wa.me works on both mobile and desktop
                   const whatsappUrl = `https://wa.me/${phone}${messageParam}`;
-                  window.open(whatsappUrl, '_blank');
+                  
+                  // Try to open WhatsApp - use fallback for popup blockers
+                  try {
+                    const newWindow = window.open(whatsappUrl, '_blank');
+                    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                      // Popup was blocked, try location.href (will navigate away)
+                      dispatchLog('warn', 'WhatsApp', 'Popup blocked, using direct navigation');
+                      window.location.href = whatsappUrl;
+                    }
+                  } catch (e) {
+                    // Fallback to direct navigation
+                    window.location.href = whatsappUrl;
+                  }
+                  
                   dispatchLog('success', 'WhatsApp Opened', `Chat with: +${phone}`);
                   const feedback = message 
                     ? `WhatsApp opened to chat with +${phone}. Message pre-filled: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`
