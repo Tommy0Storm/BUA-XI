@@ -1711,11 +1711,26 @@ ${globalRules}`;
 
       sessionRef.current = sessionPromise;
       
+      // Add timeout for session establishment (10 seconds)
+      const connectionTimeout = setTimeout(() => {
+        if (!isConnectedRef.current) {
+          console.error('[SESSION] Connection timeout - no onopen callback received within 10s');
+          dispatchLog('error', 'Connection Timeout', 'Server did not respond. Trying next key...');
+          markKeyFailed(currentKey);
+          const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
+          retryCountRef.current += 1;
+          stopAudio();
+          setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoff);
+        }
+      }, 10000);
+      
       // Log session promise resolution/rejection for debugging
       sessionPromise.then((session: any) => {
+        clearTimeout(connectionTimeout);
         console.log('[SESSION] Promise resolved - session object:', typeof session, session ? 'exists' : 'null');
         dispatchLog('info', 'Session Ready', 'WebSocket connection established');
       }).catch((err: any) => {
+        clearTimeout(connectionTimeout);
         console.error('[SESSION] Promise rejected:', err);
         dispatchLog('error', 'Session Failed', String(err));
         // Mark key as failed if it's an auth issue and trigger retry
