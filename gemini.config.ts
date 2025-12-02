@@ -91,9 +91,9 @@ export const DEFAULT_LIVE_CONFIG = {
 export const VISION = {
   enabled: true,
   sendFrames: true,
-  frameRate: 5,
-  maxWidth: 1280,
-  maxHeight: 720,
+  frameRate: 2, // Google best practice: 2 FPS for stability
+  maxWidth: 640, // Google best practice: 640x480 for camera
+  maxHeight: 480,
 };
 
 // Create client options (accept optional override apiKey)

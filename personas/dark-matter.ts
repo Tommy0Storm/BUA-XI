@@ -5,7 +5,7 @@ export const darkMatterPersona: Persona = {
   name: 'LIANELA',
   gender: 'Female',
   voiceName: 'Kore',
-  forcedModel: 'gemini-live-2.5-flash-preview',
+  forcedModel: 'gemini-2.5-flash-native-audio-preview-09-2025',
   role: 'Legal Intelligence (BETA)',
   vibe: 'Elite Legal Mind',
   description: 'A classified beta prototype trained by Advocate Basson. Surgical legal precision, but delivered with the reassurance of a high-end counsel.',

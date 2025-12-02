@@ -80,6 +80,7 @@ export function useGeminiLive({
   const [isPttMode, setIsPttMode] = useState<boolean>(false);
   const isPttActiveRef = useRef(false);
   const isDispatchingRef = useRef(false);
+  const isScreenShareRef = useRef(false); // Track if current video is screen share
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
@@ -273,9 +274,9 @@ export function useGeminiLive({
 
   // --- Video helpers (lightweight; avoid layout thrashing) ---
   const stopVideo = useCallback(() => {
-    // Cancel requestAnimationFrame instead of clearInterval
+    // Clear interval instead of cancelAnimationFrame (we switched to setInterval for 2 FPS)
     if (frameIntervalRef.current) {
-      cancelAnimationFrame(frameIntervalRef.current);
+      clearInterval(frameIntervalRef.current);
       frameIntervalRef.current = null;
     }
     if (videoStreamRef.current) {
@@ -309,8 +310,14 @@ export function useGeminiLive({
       setIsVideoActive(false);
       return;
     }
+    // CRITICAL: Don't start video if not connected - prevents WebSocket errors
+    if (!isConnectedRef.current || !sessionRef.current) {
+      dispatchLog('warn', 'Vision System', 'Cannot start video — session not connected');
+      return;
+    }
     try {
       let stream: MediaStream;
+      isScreenShareRef.current = useScreenShare; // Update ref for sendFrame logic
       
       if (useScreenShare) {
         stream = await (navigator.mediaDevices as any).getDisplayMedia({
@@ -357,72 +364,102 @@ export function useGeminiLive({
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      // Track animation frame ID for cleanup
-      let frameId: number | null = null;
-      let lastFrameTime = 0;
-      const targetFPS = 10;  // 10 FPS for vision - balanced for quality vs bandwidth
-      const frameInterval = 1000 / targetFPS;
+      // Track interval ID for cleanup (using setInterval for precise FPS control)
+      let intervalId: number | null = null;
+      let isSendingFrame = false; // Mutex to prevent overlapping sends
+      let consecutiveErrors = 0; // Track consecutive send failures
+      const MAX_CONSECUTIVE_ERRORS = 3; // Stop after 3 consecutive failures
+      const targetFPS = 2;  // 2 FPS for vision - LOW bandwidth, stable connection
+      const frameInterval = 1000 / targetFPS; // 500ms between frames
 
-      // Use requestAnimationFrame like Colab reference - more reliable on mobile than setTimeout
-      // Mobile browsers heavily throttle setTimeout but respect rAF better
-      const loop = async (timestamp: number) => {
-        // Throttle to target FPS
-        if (timestamp - lastFrameTime < frameInterval) {
-          if (isConnectedRef.current && videoStreamRef.current) {
-            frameId = requestAnimationFrame(loop);
-          }
+      // Use setInterval for precise FPS control instead of rAF (which can be too fast)
+      // This prevents overwhelming the WebSocket with too many frames
+      const sendFrame = async () => {
+        // Skip if already sending a frame (prevents overlap)
+        if (isSendingFrame) return;
+        
+        // Triple-check connection state BEFORE any async work
+        if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) {
           return;
         }
-        lastFrameTime = timestamp;
-        
-        if (!sessionRef.current || !isConnectedRef.current || !videoRef.current || !ctx) return;
         if (!videoStreamRef.current) return; // Only send frames if camera is actually active
+        
+        isSendingFrame = true;
         
         try {
           if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-            ctx.drawImage(videoRef.current, 0, 0);
+            // Resize logic: Higher res for screen share (text readability), lower for camera (bandwidth)
+            const isScreen = isScreenShareRef.current;
+            const maxWidth = isScreen ? 1280 : 640;
+            const maxHeight = isScreen ? 720 : 480;
+            
+            let targetWidth = videoRef.current.videoWidth;
+            let targetHeight = videoRef.current.videoHeight;
+            
+            if (targetWidth > maxWidth || targetHeight > maxHeight) {
+              const scale = Math.min(maxWidth / targetWidth, maxHeight / targetHeight);
+              targetWidth = Math.floor(targetWidth * scale);
+              targetHeight = Math.floor(targetHeight * scale);
+            }
+            
+            if (canvas.width !== targetWidth) canvas.width = targetWidth;
+            if (canvas.height !== targetHeight) canvas.height = targetHeight;
+            ctx.drawImage(videoRef.current, 0, 0, targetWidth, targetHeight);
 
             if (enableVisionRef.current && isConnectedRef.current) {
-              // Use promise-based toBlob for proper async handling (like Colab reference)
+              // Use promise-based toBlob with lower quality for 2 FPS
+              // Slightly higher quality for screen share to preserve text edges
+              const quality = isScreen ? 0.7 : 0.5;
               const blob = await new Promise<Blob | null>((resolve) =>
-                canvas.toBlob(resolve, 'image/jpeg', 0.6)
+                canvas.toBlob(resolve, 'image/jpeg', quality)
               );
               
+              // CRITICAL: Re-check connection state AFTER async toBlob
               if (blob && isConnectedRef.current && sessionRef.current) {
                 try {
                   const session = await sessionRef.current;
+                  // CRITICAL: Final check before send - WebSocket might have closed during await
                   if (isConnectedRef.current) {
                     await session.sendRealtimeInput({ media: blob });
-                    if (verbose) dispatchLog('info', 'DEBUG vision', 'Sent camera frame to session');
+                    consecutiveErrors = 0; // Reset error counter on success
+                    if (verbose) dispatchLog('info', 'DEBUG vision', `Sent frame ${targetWidth}x${targetHeight} @ 2 FPS`);
                   }
                 } catch (e: any) {
-                  // Only log if still connected (ignore errors during disconnect)
-                  if (isConnectedRef.current) {
-                    console.warn('[Vision] Send frame error:', e?.message || e);
+                  consecutiveErrors++;
+                  // Check if this is a WebSocket closed error or too many failures
+                  const errMsg = String(e?.message || e);
+                  if (errMsg.includes('CLOSING') || errMsg.includes('CLOSED') || consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    // WebSocket closed or too many errors - stop the interval and don't log spam
+                    if (intervalId !== null) {
+                      clearInterval(intervalId);
+                      intervalId = null;
+                      frameIntervalRef.current = null;
+                    }
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                      console.warn(`[Vision] Too many consecutive errors (${consecutiveErrors}), stopping frame loop`);
+                      dispatchLog('warn', 'Vision System', 'Video stopped due to connection issues');
+                    } else {
+                      console.warn('[Vision] WebSocket closed, stopping frame loop');
+                    }
+                  } else if (isConnectedRef.current) {
+                    console.warn(`[Vision] Send frame error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, errMsg);
                   }
                 }
               }
-            } else if (verbose) {
-              dispatchLog('info', 'DEBUG vision', 'Vision sending disabled — not sending camera frame.');
             }
           }
         } catch (e: any) {
           console.warn('[Vision] Frame loop error:', e?.message || e);
-        }
-        
-        // Schedule next frame only if still connected (use requestAnimationFrame for mobile)
-        if (isConnectedRef.current && videoStreamRef.current) {
-          frameId = requestAnimationFrame(loop);
+        } finally {
+          isSendingFrame = false;
         }
       };
       
-      // Start the loop with requestAnimationFrame
-      frameId = requestAnimationFrame(loop);
+      // Start the interval-based loop (more predictable than rAF for low FPS)
+      intervalId = window.setInterval(sendFrame, frameInterval);
       
-      // Store cleanup function in ref (we'll use frameIntervalRef to store the frameId)
-      frameIntervalRef.current = frameId;
+      // Store interval ID in ref for cleanup
+      frameIntervalRef.current = intervalId;
       
     } catch (err: any) {
       dispatchLog('error', 'Camera Access Denied', err.message || String(err));
@@ -533,6 +570,12 @@ export function useGeminiLive({
 
     dispatchLog('warn', 'DEBUG disconnect', `Called with error: ${errorMessage || 'none'} force: ${force}`);
     console.trace('disconnect() call stack');
+    
+    // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
+    if (frameIntervalRef.current) {
+      clearInterval(frameIntervalRef.current);
+      frameIntervalRef.current = null;
+    }
     
     // CRITICAL: Immediately stop worklet from sending more audio to prevent
     // "WebSocket is already in CLOSING or CLOSED state" errors
@@ -1296,7 +1339,7 @@ ${globalRules}`;
                     : `WhatsApp opened to chat with +${phone}. User can now type their message.`;
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: feedback } }] }));
                 } else if (call.name === 'copy_to_clipboard') {
-                  const text = (call.args as any).text;
+                  const { text } = (call.args as any);
                   const preview = text.length > 50 ? text.substring(0, 50) + '...' : text;
                   navigator.clipboard.writeText(text).then(() => {
                     dispatchLog('success', 'Copied', `${text.length} characters copied to clipboard`);
@@ -1305,8 +1348,7 @@ ${globalRules}`;
                   });
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `SUCCESS: Copied to clipboard (${text.length} characters): "${preview}". Tell the user they can now paste this anywhere with Ctrl+V (or Cmd+V on Mac).` } }] }));
                 } else if (call.name === 'set_reminder') {
-                  const message = (call.args as any).message;
-                  const minutes = (call.args as any).minutes;
+                  const { message, minutes } = (call.args as any);
                   const ms = minutes * 60 * 1000;
                   const reminderTime = new Date(Date.now() + ms);
                   const formattedTime = reminderTime.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
@@ -1329,7 +1371,7 @@ ${globalRules}`;
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `SUCCESS: Reminder set for ${timeDesc} from now (at ${formattedTime}). Message: "${message}". The user will receive a notification. Confirm this to the user.` } }] }));
                 } else if (call.name === 'send_sms') {
                   const phone = (call.args as any).phone_number || '';
-                  const message = (call.args as any).message;
+                  const { message } = (call.args as any);
                   const smsUrl = `sms:${phone}${phone ? '?' : ''}body=${encodeURIComponent(message)}`;
                   window.location.href = smsUrl;
                   dispatchLog('success', 'SMS Opened', `Message: ${message.substring(0, 30)}...`);
@@ -1340,8 +1382,7 @@ ${globalRules}`;
                     : `SUCCESS: SMS app opened with message pre-filled (${charCount} chars, ${smsCount} SMS). User can select recipient and send.`;
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: feedback } }] }));
                 } else if (call.name === 'create_calendar_event') {
-                  const title = (call.args as any).title;
-                  const date = (call.args as any).date;
+                  const { title, date } = (call.args as any);
                   const startTime = (call.args as any).start_time;
                   const endTime = (call.args as any).end_time || startTime;
                   const details = (call.args as any).details || '';
@@ -1353,7 +1394,7 @@ ${globalRules}`;
                   dispatchLog('success', 'Calendar Opened', `Event: ${title} on ${formattedDate}`);
                   sessionPromise.then((s: any) => s.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: { result: `Google Calendar opened with event "${title}" scheduled for ${formattedDate} at ${formattedTime}. User can review and save.` } }] }));
                 } else if (call.name === 'fetch_url_content') {
-                  const url = (call.args as any).url;
+                  const { url } = (call.args as any);
                   const customInstruction = (call.args as any).custom_instruction || '';
                   dispatchLog('info', '🌐 Fetching URL', url.substring(0, 50));
                   
@@ -1562,6 +1603,13 @@ ${globalRules}`;
             }
           },
           onclose: (e: any) => {
+            // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
+            if (frameIntervalRef.current) {
+              clearInterval(frameIntervalRef.current);
+              frameIntervalRef.current = null;
+            }
+            isConnectedRef.current = false; // Stop all sending immediately
+            
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
               try { dispatchLog('info', 'DEBUG onclose', `code:${e?.code ?? 'n/a'} reason:${e?.reason ?? 'n/a'}`); } catch(e){}
@@ -1617,6 +1665,11 @@ ${globalRules}`;
             }
           },
           onerror: (err: any) => {
+            // CRITICAL: Immediately stop video frame loop and all sending
+            if (frameIntervalRef.current) {
+              clearInterval(frameIntervalRef.current);
+              frameIntervalRef.current = null;
+            }
             isConnectedRef.current = false;
             // Enhanced error classification based on Context7 ApiError patterns
             const errMsg = String(err?.message || err || '');
@@ -1672,7 +1725,7 @@ ${globalRules}`;
         if (!isConnectedRef.current) return;
         
         const pcm = e.data.data;
-        const rms = e.data.rms;
+        const { rms } = e.data;
         
         // Auto-interrupt when user speaks (if enabled) - requires sustained loud speech
         if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > interruptionThreshold) {
