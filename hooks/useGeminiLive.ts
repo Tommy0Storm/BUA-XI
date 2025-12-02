@@ -208,14 +208,23 @@ export function useGeminiLive({
     return Date.now() - ts < KEY_BLACKLIST_MS;
   }, []);
 
-  const markKeyFailed = useCallback((key: string) => {
+  // Only blacklist keys for DEFINITIVE auth errors (401, 403, leaked)
+  const markKeyFailed = useCallback((key: string, reason: string) => {
     failedKeyMapRef.current[key] = Date.now();
-    dispatchLog('warn', 'API Key', `Marked key as failed (blacklisting for 24h).`);
+    dispatchLog('warn', 'API Key Blacklisted', `Reason: ${reason} (blacklisted for 24h)`);
   }, []);
+
+  // Rotate to next key WITHOUT blacklisting (for transient errors)
+  const rotateToNextKey = useCallback(() => {
+    if (apiKeys.length <= 1) return;
+    currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
+    dispatchLog('info', 'Key Rotation', `Rotating to key index ${currentKeyIndexRef.current}`);
+  }, [apiKeys.length]);
 
   const selectNextAvailableKeyIndex = useCallback(() => {
     if (apiKeys.length === 0) return -1;
-    const start = currentKeyIndexRef.current % apiKeys.length;
+    // Start from NEXT key (not current) to ensure rotation
+    const start = (currentKeyIndexRef.current + 1) % apiKeys.length;
     for (let i = 0; i < apiKeys.length; i++) {
       const idx = (start + i) % apiKeys.length;
       const key = apiKeys[idx];
@@ -224,7 +233,8 @@ export function useGeminiLive({
         return idx;
       }
     }
-    return -1;
+    // All keys blacklisted - try current key as last resort
+    return currentKeyIndexRef.current;
   }, [apiKeys, isKeyBlacklisted]);
 
   // --- Device enumeration ---
@@ -781,8 +791,7 @@ export function useGeminiLive({
         // Only blacklist at constructor time if it's an obvious auth problem
         const m = String(err?.message || err || '');
         if (/401|403|api key|invalid key|permission|quota/i.test(m)) {
-          markKeyFailed(currentKey);
-          dispatchLog('warn', 'API Key', `Blacklisting key during client initialization due to auth/permission error: ${m.slice(0,120)}`);
+          markKeyFailed(currentKey, `Client init auth error: ${m.slice(0,80)}`);
         } else {
           // Other constructor issues (e.g., client library problems) are not automatically considered key failures
           dispatchLog('warn', 'Client Init', `Live client initialization failed but not treated as key error: ${m.slice(0,120)}`);
@@ -1643,7 +1652,7 @@ ${globalRules}`;
               if (openTs && now - openTs < 3000) {
                 // close reason suggests something else — only blacklist for auth/permission errors
                 if (/401|403|api key|unauthor|leaked/i.test(reason + ' ' + codeMsg)) {
-                  try { markKeyFailed(currentKey); dispatchLog('warn','API Key','Session opened & closed quickly — blacklisting key due to auth/permission/leak.'); } catch(e){}
+                  try { markKeyFailed(currentKey, `Quick close auth error: ${(reason + ' ' + codeMsg).slice(0,80)}`); } catch(e){}
                 } else {
                   // quick close but not auth — do not mark key failed, retry with backoff using same key
                   dispatchLog('warn','Connection Lost','Session opened & closed quickly — retrying without blacklisting.');
@@ -1653,8 +1662,7 @@ ${globalRules}`;
               // If the close reason contains explicit auth errors, blacklist the key
               try {
                 if (/401|403|api key|invalid key|quota|leaked/i.test(reason + ' ' + codeMsg)) {
-                  markKeyFailed(currentKey);
-                  dispatchLog('warn', 'API Key', `Close reason indicates auth failure — blacklisted key index ${currentKeyIndexRef.current}`);
+                  markKeyFailed(currentKey, `Close reason auth failure: ${(reason + ' ' + codeMsg).slice(0,80)}`);
                 }
               } catch (err) {}
               sessionOpenTimeRef.current = null;
@@ -1682,8 +1690,7 @@ ${globalRules}`;
               // Classify error by status code pattern
               if (errStatus === '401' || errStatus === '403' || /api key|invalid key|unauthor|permission|leaked/i.test(errMsg)) {
                 // Authentication/Permission error - blacklist key
-                markKeyFailed(currentKey);
-                dispatchLog('warn', 'API Key', `Auth failure (${errStatus}) — blacklisted key index ${currentKeyIndexRef.current}`);
+                markKeyFailed(currentKey, `Auth error ${errStatus}: ${errMsg.slice(0,80)}`);
               } else if (errStatus === '429' || /rate limit|quota exceeded|too many requests/i.test(errMsg)) {
                 // Rate limit - exponential backoff, don't blacklist key permanently
                 const backoffMs = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000); // Cap at 30s for rate limits
@@ -1715,8 +1722,9 @@ ${globalRules}`;
       const connectionTimeout = setTimeout(() => {
         if (!isConnectedRef.current) {
           console.error('[SESSION] Connection timeout - no onopen callback received within 10s');
-          dispatchLog('error', 'Connection Timeout', 'Server did not respond. Trying next key...');
-          markKeyFailed(currentKey);
+          dispatchLog('error', 'Connection Timeout', 'Server did not respond. Rotating to next key...');
+          // DON'T blacklist on timeout - just rotate to next key (timeout is often transient)
+          rotateToNextKey();
           const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
           retryCountRef.current += 1;
           stopAudio();
@@ -1736,8 +1744,7 @@ ${globalRules}`;
         // Mark key as failed if it's an auth issue and trigger retry
         const errMsg = String(err?.message || err);
         if (/401|403|leaked|unauthor|api key/i.test(errMsg)) {
-          markKeyFailed(currentKey);
-          dispatchLog('warn', 'API Key', 'Blacklisting failed key and retrying...');
+          markKeyFailed(currentKey, `Session promise auth error: ${errMsg.slice(0,80)}`);
           const backoff = Math.min(1000 * Math.pow(2, retryCountRef.current), 5000);
           retryCountRef.current += 1;
           stopAudio();
@@ -1808,7 +1815,7 @@ ${globalRules}`;
       if (msg.toLowerCase().includes('401') || msg.toLowerCase().includes('403') || msg.toLowerCase().includes('realtime client constructor')) {
         try {
           const curKey = apiKeys[currentKeyIndexRef.current];
-          markKeyFailed(curKey);
+          markKeyFailed(curKey, `Connect catch auth error: ${msg.slice(0,80)}`);
         } catch {}
       }
 
