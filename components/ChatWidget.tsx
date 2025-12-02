@@ -806,8 +806,8 @@ export const ChatWidget: React.FC = () => {
                                 onChange={(e) => setForcedModel(e.target.value === 'auto' ? null : e.target.value)}
                                 className="w-full px-4 py-2 text-xs rounded-xl border-2 border-gray-200 bg-white font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900 appearance-none hover:border-gray-400 transition-colors"
                                 title="Runtime model selection">
-                                <option value="gemini-2.5-flash-native-audio-preview-09-2025">PoLYGLoT Native</option>
-                                <option value="gemini-live-2.5-flash-preview">PoLYGLoT Standard</option>
+                                <option value="gemini-2.5-flash-native-audio-preview-09-2025">VCB-AI Native</option>
+                                <option value="gemini-live-2.5-flash-preview">VCB-AI Standard</option>
                             </select>
                             <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                                 <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-500"></div>

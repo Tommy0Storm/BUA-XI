@@ -187,7 +187,7 @@ export default function LiveAudioPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Live Audio – Gemini Native Audio</h1>
+      <h1>Live Audio – VCB-AI Native Audio</h1>
       <p>Status: {status}</p>
 
       {!connected && (
