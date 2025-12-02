@@ -314,6 +314,7 @@ export function useGeminiLive({
   }, [isVideoActive]);
   
   const startVideo = useCallback(async (useScreenShare = false) => {
+    console.log('[DEBUG startVideo] Called. enableVisionRef:', enableVisionRef.current, 'isConnected:', isConnectedRef.current, 'sessionRef:', !!sessionRef.current);
     // If vision is disabled for this session, avoid starting camera or prompting for permission
     if (!enableVisionRef.current) {
       dispatchLog('info', 'Vision System', 'Vision disabled — not starting camera');
@@ -446,11 +447,14 @@ export function useGeminiLive({
                   const session = await sessionRef.current;
                   // CRITICAL: Final check before send - WebSocket might have closed during await
                   if (isConnectedRef.current) {
+                    console.log('[DEBUG vision] Sending frame, blob size:', blob.size, 'bytes');
                     await session.sendRealtimeInput({ media: blob });
+                    console.log('[DEBUG vision] Frame sent successfully');
                     consecutiveErrors = 0; // Reset error counter on success
                     if (verbose) dispatchLog('info', 'DEBUG vision', `Sent frame ${targetWidth}x${targetHeight} @ 2 FPS`);
                   }
                 } catch (e: any) {
+                  console.error('[DEBUG vision] Frame send FAILED:', e?.message || e);
                   consecutiveErrors++;
                   // Check if this is a WebSocket closed error or too many failures
                   const errMsg = String(e?.message || e);
@@ -673,25 +677,9 @@ export function useGeminiLive({
       });
     }
 
-    // PRE-AUTHORIZE CAMERA: Get camera permission BEFORE WebSocket connection
-    // This prevents WebSocket instability when getUserMedia is called later
-    // (matches the working colab.txt pattern where camera starts with session)
-    if (enableVisionRef.current) {
-      dispatchLog('info', 'Vision System', 'Pre-authorizing camera access...');
-      try {
-        const tempStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false
-        });
-        // Stop the temp stream immediately - we just needed permission
-        tempStream.getTracks().forEach(track => track.stop());
-        dispatchLog('success', 'Vision System', 'Camera authorized - ready for activation');
-      } catch (camErr: any) {
-        // Camera denied - disable vision for this session but continue
-        dispatchLog('warn', 'Vision System', `Camera access denied: ${camErr.message || camErr}. Vision disabled.`);
-        enableVisionRef.current = false;
-      }
-    }
+    // PRE-AUTHORIZE CAMERA: Skip for now - was causing issues
+    // The camera permission will be requested when user clicks camera button
+    // if (enableVisionRef.current) { ... }
 
     // stop any previous audio graph
     stopAudio();
@@ -1867,6 +1855,7 @@ ${globalRules}`;
       workletNode.port.postMessage({ type: 'setSafeToSpeak', value: false });
       workletNode.port.postMessage({ type: 'setMuted', value: isMicMutedRef.current });
       
+      let audioSendCount = 0; // DEBUG counter
       workletNode.port.onmessage = (e) => {
         if (e.data.type !== 'audio') return;
         if (!isConnectedRef.current) return;
@@ -1875,6 +1864,12 @@ ${globalRules}`;
         
         const pcm = e.data.data;
         const { rms } = e.data;
+        
+        // DEBUG: Log every 50th audio send
+        audioSendCount++;
+        if (audioSendCount % 50 === 1) {
+          console.log('[DEBUG audio] Sending audio chunk #', audioSendCount, 'rms:', rms.toFixed(4));
+        }
         
         // Auto-interrupt when user speaks (if enabled) - requires sustained loud speech
         if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > interruptionThreshold) {
