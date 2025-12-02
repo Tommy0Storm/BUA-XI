@@ -325,6 +325,15 @@ export function useGeminiLive({
       dispatchLog('warn', 'Vision System', 'Cannot start video — session not connected');
       return;
     }
+    
+    // CONNECTION STABILITY CHECK: Brief delay to allow any in-flight operations to complete
+    // This prevents WebSocket instability when activating camera mid-session
+    await new Promise(r => setTimeout(r, 100));
+    if (!isConnectedRef.current) {
+      dispatchLog('warn', 'Vision System', 'Connection lost during stabilization — aborting camera');
+      return;
+    }
+    
     try {
       let stream: MediaStream;
       isScreenShareRef.current = useScreenShare; // Update ref for sendFrame logic
@@ -358,6 +367,13 @@ export function useGeminiLive({
             audio: false
           });
         }
+      }
+      
+      // POST-PERMISSION CHECK: Verify WebSocket didn't close during permission dialog
+      if (!isConnectedRef.current) {
+        dispatchLog('warn', 'Vision System', 'Connection lost during camera setup — stopping stream');
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
       
       if (videoRef.current) {
@@ -655,6 +671,26 @@ export function useGeminiLive({
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       });
+    }
+
+    // PRE-AUTHORIZE CAMERA: Get camera permission BEFORE WebSocket connection
+    // This prevents WebSocket instability when getUserMedia is called later
+    // (matches the working colab.txt pattern where camera starts with session)
+    if (enableVisionRef.current) {
+      dispatchLog('info', 'Vision System', 'Pre-authorizing camera access...');
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        // Stop the temp stream immediately - we just needed permission
+        tempStream.getTracks().forEach(track => track.stop());
+        dispatchLog('success', 'Vision System', 'Camera authorized - ready for activation');
+      } catch (camErr: any) {
+        // Camera denied - disable vision for this session but continue
+        dispatchLog('warn', 'Vision System', `Camera access denied: ${camErr.message || camErr}. Vision disabled.`);
+        enableVisionRef.current = false;
+      }
     }
 
     // stop any previous audio graph
