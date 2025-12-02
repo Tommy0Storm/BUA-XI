@@ -1680,29 +1680,28 @@ ${globalRules}`;
             
             // Check if onopen ever fired
             const onopenFired = sessionOpenTimeRef.current !== null;
-            console.error('[ONCLOSE] onopen had fired:', onopenFired, 'sessionOpenTime:', sessionOpenTimeRef.current);
+            console.log('[ONCLOSE] onopen had fired:', onopenFired, 'sessionOpenTime:', sessionOpenTimeRef.current);
             
-            // Handle specific close codes
-            if (closeCode === 1008) {
-              // Policy violation - API key is leaked/revoked, MUST blacklist
-              markKeyFailed(currentKey, `Close code 1008: API key leaked or revoked`);
-              dispatchLog('error', 'API Key Revoked', 'This API key has been flagged as leaked. Rotating to next key...');
+            // Handle specific close codes - 1007 (invalid key) and 1008 (leaked key)
+            if (closeCode === 1007 || closeCode === 1008) {
+              const reasonText = closeCode === 1008 ? 'leaked/revoked' : 'invalid/not found';
+              markKeyFailed(currentKey, `Close code ${closeCode}: API key ${reasonText}`);
+              dispatchLog('error', 'API Key Error', `Key ${reasonText}. Rotating to next key...`);
               // CRITICAL: Clear sessionRef so retry can proceed
               sessionRef.current = null;
-              // Immediately retry with next key (don't wait for general retry logic)
-              console.log('[1008 HANDLER] Blacklisted key, scheduling retry in 500ms');
-              console.log('[1008 HANDLER] connectRef.current exists:', !!connectRef.current);
+              // Immediately retry with next key
+              console.log(`[${closeCode} HANDLER] Blacklisted key, scheduling retry in 500ms`);
               stopAudio();
               setTimeout(async () => {
-                console.log('[1008 RETRY] Attempting reconnect with next key...');
+                console.log(`[${closeCode} RETRY] Attempting reconnect with next key...`);
                 try {
                   if (connectRef.current) {
                     await connectRef.current(true);
                   } else {
-                    console.error('[1008 RETRY] connectRef.current is null! Cannot retry.');
+                    console.error(`[${closeCode} RETRY] connectRef.current is null!`);
                   }
                 } catch (retryErr) {
-                  console.error('[1008 RETRY] Error during retry:', retryErr);
+                  console.error(`[${closeCode} RETRY] Error:`, retryErr);
                 }
               }, 500);
               return; // Exit early - don't run other onclose logic
