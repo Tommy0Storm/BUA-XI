@@ -1754,10 +1754,10 @@ ${globalRules}`;
         }
         
         const blob = createPcmBlob(pcm, AUDIO_CONFIG.inputSampleRate);
-        sessionPromise.then((session: any) => {
+        sessionPromise.then(async (session: any) => {
           if (!isConnectedRef.current) return; // Guard: don't send if disconnected
           try {
-            session.sendRealtimeInput({ media: blob });
+            await session.sendRealtimeInput({ media: blob });
           } catch (e: any) {
             // Check for WebSocket closed error to prevent spam
             const errMsg = String(e?.message || e);
