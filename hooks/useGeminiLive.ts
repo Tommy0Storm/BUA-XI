@@ -19,6 +19,20 @@ import { WORKLET_CODE } from '../utils/workletCode';
 // Sanitize log messages to prevent injection
 const sanitizeLog = (str: string) => str.replace(/[\r\n]/g, ' ').slice(0, 200);
 
+// Convert browser Blob to SDK-compatible format {data: base64, mimeType: string}
+// The SDK expects this format, NOT raw browser Blobs
+async function blobToSdkFormat(blob: Blob): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1]; // Remove data:...;base64, prefix
+      resolve({ data: base64, mimeType: blob.type });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 // Extract URLs from text
 const extractLinks = (text: string): string[] => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -51,7 +65,7 @@ export function useGeminiLive({
   apiKey: overrideApiKey,
   persona,
   speechThreshold = 0.02, // slightly higher default to reduce false triggers
-  interruptionThreshold = 0.15, // RMS threshold - raised to reduce false interrupts from background noise
+  interruptionThreshold = 0.25, // RMS threshold - raised to reduce false interrupts from background noise
   userEmail,
   verboseLogging,
   enableVision: enableVisionProp,
@@ -314,7 +328,6 @@ export function useGeminiLive({
   }, [isVideoActive]);
   
   const startVideo = useCallback(async (useScreenShare = false) => {
-    console.log('[DEBUG startVideo] Called. enableVisionRef:', enableVisionRef.current, 'isConnected:', isConnectedRef.current, 'sessionRef:', !!sessionRef.current);
     // If vision is disabled for this session, avoid starting camera or prompting for permission
     if (!enableVisionRef.current) {
       dispatchLog('info', 'Vision System', 'Vision disabled — not starting camera');
@@ -327,11 +340,24 @@ export function useGeminiLive({
       return;
     }
     
-    // CONNECTION STABILITY CHECK: Brief delay to allow any in-flight operations to complete
-    // This prevents WebSocket instability when activating camera mid-session
-    await new Promise(r => setTimeout(r, 100));
+    // CRITICAL FOR NATIVE AUDIO MODEL: Pause mic temporarily while we initialize camera
+    // This prevents the model from being overwhelmed by simultaneous audio + new video stream
+    const wasSafeToSpeak = safeToSpeakRef.current;
+    safeToSpeakRef.current = false;
+    if (workletNodeRef.current?.port) {
+      workletNodeRef.current.port.postMessage({ type: 'setSafeToSpeak', value: false });
+    }
+    dispatchLog('info', 'Vision System', 'Pausing audio for camera initialization...');
+    
+    // Brief delay to allow any in-flight audio to complete
+    await new Promise(r => setTimeout(r, 200));
     if (!isConnectedRef.current) {
       dispatchLog('warn', 'Vision System', 'Connection lost during stabilization — aborting camera');
+      // Restore audio state
+      safeToSpeakRef.current = wasSafeToSpeak;
+      if (workletNodeRef.current?.port) {
+        workletNodeRef.current.port.postMessage({ type: 'setSafeToSpeak', value: wasSafeToSpeak });
+      }
       return;
     }
     
@@ -437,24 +463,25 @@ export function useGeminiLive({
               // Use promise-based toBlob with lower quality for 2 FPS
               // Slightly higher quality for screen share to preserve text edges
               const quality = isScreen ? 0.7 : 0.5;
-              const blob = await new Promise<Blob | null>((resolve) =>
+              const rawBlob = await new Promise<Blob | null>((resolve) =>
                 canvas.toBlob(resolve, 'image/jpeg', quality)
               );
               
               // CRITICAL: Re-check connection state AFTER async toBlob
-              if (blob && isConnectedRef.current && sessionRef.current) {
+              if (rawBlob && isConnectedRef.current && sessionRef.current) {
                 try {
+                  // Convert browser Blob to SDK format {data: base64, mimeType: string}
+                  // The SDK expects this format, raw browser Blobs serialize to empty objects
+                  const sdkBlob = await blobToSdkFormat(rawBlob);
+                  
                   const session = await sessionRef.current;
                   // CRITICAL: Final check before send - WebSocket might have closed during await
                   if (isConnectedRef.current) {
-                    console.log('[DEBUG vision] Sending frame, blob size:', blob.size, 'bytes');
-                    await session.sendRealtimeInput({ media: blob });
-                    console.log('[DEBUG vision] Frame sent successfully');
+                    await session.sendRealtimeInput({ media: sdkBlob });
                     consecutiveErrors = 0; // Reset error counter on success
-                    if (verbose) dispatchLog('info', 'DEBUG vision', `Sent frame ${targetWidth}x${targetHeight} @ 2 FPS`);
+                    if (verbose) dispatchLog('info', 'DEBUG vision', `Sent frame ${targetWidth}x${targetHeight} @ 2 FPS (${Math.round(sdkBlob.data.length / 1024)}KB base64)`);
                   }
                 } catch (e: any) {
-                  console.error('[DEBUG vision] Frame send FAILED:', e?.message || e);
                   consecutiveErrors++;
                   // Check if this is a WebSocket closed error or too many failures
                   const errMsg = String(e?.message || e);
@@ -491,9 +518,29 @@ export function useGeminiLive({
       // Store interval ID in ref for cleanup
       frameIntervalRef.current = intervalId;
       
+      // CRITICAL: Send first frame immediately, then restore audio after a brief delay
+      // This ensures the model receives the first video frame before audio resumes
+      await sendFrame();
+      
+      // Wait a bit for the model to process the first frame, then restore audio
+      setTimeout(() => {
+        if (isConnectedRef.current) {
+          safeToSpeakRef.current = true;
+          if (workletNodeRef.current?.port) {
+            workletNodeRef.current.port.postMessage({ type: 'setSafeToSpeak', value: true });
+          }
+          dispatchLog('success', 'Vision System', 'Camera active, audio restored');
+        }
+      }, 300);
+      
     } catch (err: any) {
       dispatchLog('error', 'Camera Access Denied', err.message || String(err));
       setIsVideoActive(false);
+      // Restore audio on error
+      safeToSpeakRef.current = true;
+      if (workletNodeRef.current?.port) {
+        workletNodeRef.current.port.postMessage({ type: 'setSafeToSpeak', value: true });
+      }
     }
   }, [verbose, facingMode]);
 
@@ -1855,7 +1902,6 @@ ${globalRules}`;
       workletNode.port.postMessage({ type: 'setSafeToSpeak', value: false });
       workletNode.port.postMessage({ type: 'setMuted', value: isMicMutedRef.current });
       
-      let audioSendCount = 0; // DEBUG counter
       workletNode.port.onmessage = (e) => {
         if (e.data.type !== 'audio') return;
         if (!isConnectedRef.current) return;
@@ -1864,12 +1910,6 @@ ${globalRules}`;
         
         const pcm = e.data.data;
         const { rms } = e.data;
-        
-        // DEBUG: Log every 50th audio send
-        audioSendCount++;
-        if (audioSendCount % 50 === 1) {
-          console.log('[DEBUG audio] Sending audio chunk #', audioSendCount, 'rms:', rms.toFixed(4));
-        }
         
         // Auto-interrupt when user speaks (if enabled) - requires sustained loud speech
         if (autoInterruptRef.current && modelIsSpeakingRef.current && rms > interruptionThreshold) {
