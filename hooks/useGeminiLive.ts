@@ -986,16 +986,27 @@ ${globalRules}`;
               }
               sessionPromise.then((session: any) => {
                 // Double-check connection state after promise resolves
-                if (!isConnectedRef.current) return;
+                if (!isConnectedRef.current) {
+                  clearInterval(heartbeatInterval);
+                  return;
+                }
                 try {
                   const silentData = new Float32Array(160); // 10ms silence
                   const pcmBlob = createPcmBlob(silentData, AUDIO_CONFIG.inputSampleRate);
                   session.sendRealtimeInput({ media: pcmBlob });
                   if (verbose) dispatchLog('info', 'DEBUG heartbeat', 'Sent');
-                } catch (e) {
-                  // Silently ignore if connection closed
+                } catch (e: any) {
+                  // Check if it's a WebSocket closed error
+                  const errMsg = String(e?.message || e || '');
+                  if (errMsg.includes('CLOSING') || errMsg.includes('CLOSED')) {
+                    console.warn('[HEARTBEAT] WebSocket closed, stopping heartbeat');
+                    clearInterval(heartbeatInterval);
+                    isConnectedRef.current = false;
+                  }
                 }
-              }).catch(() => {});
+              }).catch(() => {
+                clearInterval(heartbeatInterval);
+              });
             }, 10000); // every 10 seconds
 
             // Start demo timer
