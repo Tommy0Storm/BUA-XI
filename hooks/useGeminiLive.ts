@@ -120,6 +120,7 @@ export function useGeminiLive({
   const currentOutputTranscriptionRef = useRef<string>('');
   const isConnectedRef = useRef<boolean>(false);
   const connectRef = useRef<((isRetry?: boolean, modelOverride?: string | null) => Promise<void>) | null>(null);
+  const startVideoRef = useRef<((useScreenShare?: boolean) => Promise<void>) | null>(null);
 
   // Key rotation & blacklisting
   const rawEnvKeys =
@@ -170,6 +171,7 @@ export function useGeminiLive({
   const firstResponseReceivedRef = useRef(false);
   const modelIsSpeakingRef = useRef(false);
   const greetingSentRef = useRef(false);
+  const isSwitchingToVideoRef = useRef(false);
   // Track timestamps to detect sessions that fail quickly (bad key or unsupported modality)
   const sessionOpenTimeRef = useRef<number | null>(null);
   const playedChunksRef = useRef<Set<string>>(new Set());
@@ -339,6 +341,23 @@ export function useGeminiLive({
       dispatchLog('warn', 'Vision System', 'Cannot start video — session not connected');
       return;
     }
+    
+    // If video is being turned on mid-session (and we're not already in the middle of a 
+    // video mode switch), we need to reset the connection to let the backend properly 
+    // handle the new modality (audio + video).
+    // This prevents "WebSocket is already in CLOSING or CLOSED state" errors.
+    // Note: We check !isSwitchingToVideoRef.current to avoid infinite loops - once we've
+    // reconnected for video mode, we proceed directly to camera setup.
+    if (isConnectedRef.current && !videoStreamRef.current && !isSwitchingToVideoRef.current) {
+      dispatchLog('info', 'Vision System', 'Switching to video mode — resetting connection...');
+      isSwitchingToVideoRef.current = true;
+      isScreenShareRef.current = useScreenShare; // Remember the mode for after reconnect
+      disconnect();
+      return; // The onclose handler will trigger the reconnection with video
+    }
+    
+    // Reset the flag now that we're proceeding with camera setup after reconnect
+    isSwitchingToVideoRef.current = false;
     
     // CRITICAL FOR NATIVE AUDIO MODEL: Pause mic temporarily while we initialize camera
     // This prevents the model from being overwhelmed by simultaneous audio + new video stream
@@ -1762,6 +1781,26 @@ ${globalRules}`;
               return; // Exit early - don't run other onclose logic
             }
             
+            // Handle planned video mode switch - reconnect immediately
+            if (isSwitchingToVideoRef.current) {
+              dispatchLog('info', 'Vision System', 'Reconnecting for video mode...');
+              // DON'T reset isSwitchingToVideoRef here - let startVideo reset it after checking
+              sessionRef.current = null;
+              // Reconnect immediately, then start video after connection is established
+              setTimeout(async () => {
+                if (connectRef.current) {
+                  await connectRef.current(false);
+                  // After reconnect, start video with the saved screen share preference
+                  setTimeout(() => {
+                    if (isConnectedRef.current && startVideoRef.current) {
+                      startVideoRef.current(isScreenShareRef.current);
+                    }
+                  }, 500);
+                }
+              }, 100);
+              return;
+            }
+            
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
               try { dispatchLog('info', 'DEBUG onclose', `code:${e?.code ?? 'n/a'} reason:${e?.reason ?? 'n/a'}`); } catch(e){}
@@ -1977,6 +2016,10 @@ ${globalRules}`;
   useEffect(() => {
     connectRef.current = connect;
   }, [connect]);
+
+  useEffect(() => {
+    startVideoRef.current = startVideo;
+  }, [startVideo]);
 
   // Minimal exported API
   return {
