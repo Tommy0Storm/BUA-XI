@@ -943,7 +943,7 @@ ${globalRules}`;
           systemInstruction: structuredSystemInstruction,
           temperature: personaRef.current.temperature ?? 0.7,
           tools: LIVE_API_TOOLS,
-          toolConfig: userLocationRef.current ? { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } } : undefined
+          toolConfig: { googleSearchRetrieval: { dynamicRetrievalConfig: { mode: 'MODE_DYNAMIC', dynamicThreshold: 0.3 } } }
         },
         callbacks: {
           onopen: () => {
@@ -1025,6 +1025,18 @@ ${globalRules}`;
                 }
               }).catch(() => {});
             }
+          },
+          onclose: (event: any) => {
+             console.warn('[SESSION] onClose:', event);
+             isConnectedRef.current = false;
+             setStatus('disconnected');
+             dispatchLog('warn', 'Session Closed', `Code: ${event?.code}, Reason: ${event?.reason || 'Unknown'}`);
+             stopAudio();
+          },
+          onerror: (error: any) => {
+             console.error('[SESSION] onError:', error);
+             dispatchLog('error', 'Session Error', String(error?.message || error));
+             // Don't necessarily disconnect on error, but log it
           },
           onmessage: async (msg: LiveServerMessage) => {
             if (connectionIdRef.current !== myConnectionId) return;
@@ -1758,9 +1770,17 @@ ${globalRules}`;
           if (!isConnectedRef.current) return; // Guard: don't send if disconnected
           try {
             session.sendRealtimeInput({ media: blob });
-          } catch (e) {
-            // Silently ignore WebSocket closed errors
-            if (isConnectedRef.current && verbose) dispatchLog('warn', 'Audio Send Failed', String(e));
+          } catch (e: any) {
+            // Check for WebSocket closed error to prevent spam
+            const errMsg = String(e?.message || e);
+            if (errMsg.includes('CLOSING') || errMsg.includes('CLOSED')) {
+               // If socket is closed, immediately update state to stop further attempts
+               isConnectedRef.current = false;
+               console.warn('[Audio] WebSocket closed unexpectedly during send');
+               return;
+            }
+            // Silently ignore other errors if we think we're connected (might be transient)
+            if (isConnectedRef.current && verbose) dispatchLog('warn', 'Audio Send Failed', errMsg);
           }
         }).catch(() => {});
       };
