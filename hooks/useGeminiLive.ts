@@ -1618,7 +1618,48 @@ ${globalRules}`;
             }
           },
           onclose: (e: any) => {
-            console.error('[ONCLOSE] WebSocket closed!', { code: e?.code, reason: e?.reason, wasClean: e?.wasClean });
+            // WebSocket Close Codes Reference:
+            // 1000 = Normal closure (clean disconnect)
+            // 1001 = Going away (server/client navigating away)
+            // 1002 = Protocol error
+            // 1003 = Unsupported data type
+            // 1006 = Abnormal closure (no close frame received - connection dropped)
+            // 1007 = Invalid frame payload data
+            // 1008 = Policy violation (API key leaked/revoked)
+            // 1009 = Message too big
+            // 1010 = Missing extension
+            // 1011 = Internal server error
+            // 1012 = Service restart
+            // 1013 = Try again later
+            // 1014 = Bad gateway
+            // 1015 = TLS handshake failure
+            // 4000+ = Application-specific (Google API errors)
+            const closeCode = e?.code || 0;
+            const closeReason = e?.reason || '';
+            const wasClean = e?.wasClean ?? false;
+            
+            // Human-readable close code interpretation
+            const codeDescriptions: Record<number, string> = {
+              1000: 'Normal closure',
+              1001: 'Going away',
+              1002: 'Protocol error',
+              1003: 'Unsupported data',
+              1006: 'Abnormal closure (connection dropped)',
+              1007: 'Invalid payload',
+              1008: 'Policy violation (API key leaked/revoked)',
+              1009: 'Message too big',
+              1010: 'Missing extension',
+              1011: 'Internal server error',
+              1012: 'Service restart',
+              1013: 'Try again later',
+              1014: 'Bad gateway',
+              1015: 'TLS handshake failure',
+            };
+            const codeDesc = codeDescriptions[closeCode] || (closeCode >= 4000 ? 'Google API error' : 'Unknown');
+            
+            console.error(`[ONCLOSE] WebSocket closed! Code: ${closeCode} (${codeDesc}), Reason: "${closeReason}", Clean: ${wasClean}`);
+            dispatchLog('warn', 'WebSocket Closed', `Code ${closeCode}: ${codeDesc}${closeReason ? ` - ${closeReason}` : ''}`);
+            
             // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
             if (frameIntervalRef.current) {
               clearInterval(frameIntervalRef.current);
@@ -1629,6 +1670,13 @@ ${globalRules}`;
             // Check if onopen ever fired
             const onopenFired = sessionOpenTimeRef.current !== null;
             console.error('[ONCLOSE] onopen had fired:', onopenFired, 'sessionOpenTime:', sessionOpenTimeRef.current);
+            
+            // Handle specific close codes
+            if (closeCode === 1008) {
+              // Policy violation - API key is leaked/revoked, MUST blacklist
+              markKeyFailed(currentKey, `Close code 1008: API key leaked or revoked`);
+              dispatchLog('error', 'API Key Revoked', 'This API key has been flagged as leaked. Rotating to next key...');
+            }
             
             if (!isIntentionalDisconnectRef.current) {
               // log close details for diagnosis
