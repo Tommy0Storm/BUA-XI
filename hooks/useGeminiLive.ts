@@ -842,8 +842,8 @@ export function useGeminiLive({
       // If a modelOverride is provided, that takes precedence (used for fallbacks)
       // Always prefer runtime override, otherwise use the native audio preview model for live audio
       const chosenModel = modelOverride ?? forcedModelRef.current ?? MODELS.nativeAudio;
-      // SECURITY: Only log to dispatchLog UI, not browser console
-      if (verbose) dispatchLog('info', 'DEBUG', `Using model: ${chosenModel} (vision:${enableVisionRef.current})`);
+      // SECURITY: Model details not logged
+      if (verbose) dispatchLog('info', 'DEBUG', `Vision: ${enableVisionRef.current ? 'enabled' : 'disabled'}`);
 
       // Build structured prompt with XML markup
       const userEmailContext = userEmail ? `<user_identity>\nUSER EMAIL: ${userEmail}\n</user_identity>` : '';
@@ -934,7 +934,7 @@ ${globalRules}`;
 
       // SECURITY: Removed API key logging - only log non-sensitive connection info
       if (verbose) console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
-      dispatchLog('info', 'Connecting', `Model: ${chosenModel.split('/').pop()}`);
+      dispatchLog('info', 'Connecting', 'Establishing neural link...');
       
       let sessionPromise: Promise<any>;
       try {
@@ -1708,7 +1708,7 @@ ${globalRules}`;
               // If we failed quickly AND the reason suggests the model doesn't support bidiGenerateContent
               // then this is NOT a key/auth problem — attempt a fallback to a compatible multimodal model
               if (openTs && now - openTs < 3000 && modelUnsupported) {
-                dispatchLog('warn','Model Compatibility', `Detected model incompatible for bidiGenerateContent: ${chosenModel}. This project expects the native-audio model 'gemini-2.5-flash-native-audio-preview-09-2025'. Reason: ${reason}`);
+                dispatchLog('warn','Model Compatibility', 'AI model compatibility issue detected. Retrying...');
                 // Prevent retry loops — attempt a single fallback for this attempt
                 try { sessionOpenTimeRef.current = null; } catch {}
                 sessionRef.current = null; // CRITICAL: Clear session ref so retry can proceed
@@ -1773,7 +1773,7 @@ ${globalRules}`;
                 setTimeout(() => { if (connectRef.current) connectRef.current(true); }, backoffMs);
               } else if (errStatus === '404' || /not found for API version|not supported for bidiGenerateContent|unsupported modality/i.test(errMsg)) {
                 // Model incompatibility - not a key problem
-                dispatchLog('warn', 'Model Compatibility', `Model '${chosenModel}' incompatible. Expected: 'gemini-2.5-flash-native-audio-preview-09-2025'`);
+                dispatchLog('warn', 'Model Compatibility', 'AI model compatibility issue detected');
               } else if (errStatus === '400' || /invalid|bad request|malformed/i.test(errMsg)) {
                 // Invalid request - log for debugging
                 dispatchLog('error', 'Invalid Request', `Bad request params: ${errMsg.slice(0, 100)}`);
