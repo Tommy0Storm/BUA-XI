@@ -218,7 +218,7 @@ export function useGeminiLive({
   const rotateToNextKey = useCallback(() => {
     if (apiKeys.length <= 1) return;
     currentKeyIndexRef.current = (currentKeyIndexRef.current + 1) % apiKeys.length;
-    dispatchLog('info', 'Key Rotation', `Rotating to key index ${currentKeyIndexRef.current}`);
+    dispatchLog('info', 'Key Rotation', 'Switching to next available key');
   }, [apiKeys.length]);
 
   const selectNextAvailableKeyIndex = useCallback(() => {
@@ -574,12 +574,12 @@ export function useGeminiLive({
   const disconnect = useCallback(async (errorMessage?: string, force = false) => {
     // Block accidental programmatic disconnects unless explicitly forced
     if (!force && !manualUserActionRef.current) {
-      console.warn("[BuaX1] BLOCKED accidental disconnect call (no force, not user-initiated)");
+      // Silently block - don't spam console
       return;
     }
 
-    dispatchLog('warn', 'DEBUG disconnect', `Called with error: ${errorMessage || 'none'} force: ${force}`);
-    console.trace('disconnect() call stack');
+    // SECURITY: Removed console.trace - only log to UI via dispatchLog
+    if (verbose) dispatchLog('info', 'Disconnect', `force: ${force}`);
     
     // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
     if (frameIntervalRef.current) {
@@ -646,12 +646,10 @@ export function useGeminiLive({
               longitude: position.coords.longitude
             };
             dispatchLog('success', '📍 LOCATION LOCKED', `Lat: ${position.coords.latitude.toFixed(4)}, Lon: ${position.coords.longitude.toFixed(4)}`);
-            console.log('[LOCATION] User location captured:', userLocationRef.current);
             resolve();
           },
           (error) => {
             dispatchLog('warn', 'Location Denied', 'Continuing without location');
-            console.warn('[LOCATION] User denied location:', error);
             resolve(); // Continue anyway
           },
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -667,15 +665,14 @@ export function useGeminiLive({
     setError(null);
     isDispatchingRef.current = false;
 
-    // Show current blacklist summary (debug)
-    try {
-      const now = Date.now();
-      const blacklisted = Object.entries(failedKeyMapRef.current).filter(([, ts]) => now - ts < KEY_BLACKLIST_MS).map(([k]) => k);
-      console.log('[KEY DEBUG] Total keys:', apiKeys.length);
-      console.log('[KEY DEBUG] Blacklisted count:', blacklisted.length);
-      console.log('[KEY DEBUG] Available keys:', apiKeys.length - blacklisted.length);
-      if (verbose) dispatchLog('info','DEBUG keys', `blacklistedCount=${blacklisted.length}`);
-    } catch(e) {}
+    // SECURITY: Only log key counts (not actual keys) and only in verbose mode
+    if (verbose) {
+      try {
+        const now = Date.now();
+        const blacklistedCount = Object.entries(failedKeyMapRef.current).filter(([, ts]) => now - ts < KEY_BLACKLIST_MS).length;
+        dispatchLog('info', 'Key Status', `${apiKeys.length - blacklistedCount}/${apiKeys.length} keys available`);
+      } catch(e) {}
+    }
 
     // rotate/select key
     const nextIndex = selectNextAvailableKeyIndex();
@@ -686,9 +683,7 @@ export function useGeminiLive({
     }
     const currentKey = apiKeys[nextIndex];
 
-    // don't print keys; print only the number of keys (safe)
-    console.log('[KEY DEBUG] Selected key index:', nextIndex);
-    console.log('[KEY DEBUG] Key preview:', currentKey.substring(0, 20) + '...');
+    // SECURITY: Never log API keys or key previews to console
     dispatchLog('info', 'Connecting...', `Using key index ${nextIndex} of ${apiKeys.length}`);
 
     const myConnectionId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -847,8 +842,7 @@ export function useGeminiLive({
       // If a modelOverride is provided, that takes precedence (used for fallbacks)
       // Always prefer runtime override, otherwise use the native audio preview model for live audio
       const chosenModel = modelOverride ?? forcedModelRef.current ?? MODELS.nativeAudio;
-      console.log('[MODEL DEBUG] Chosen model:', chosenModel);
-      console.log('[MODEL DEBUG] Vision enabled:', enableVisionRef.current);
+      // SECURITY: Only log to dispatchLog UI, not browser console
       if (verbose) dispatchLog('info', 'DEBUG', `Using model: ${chosenModel} (vision:${enableVisionRef.current})`);
 
       // Build structured prompt with XML markup
@@ -928,10 +922,7 @@ export function useGeminiLive({
   ${toolProtocols}
 </rules_of_engagement>`;
       
-      // Log what we're sending to the AI
-      console.log('[SYSTEM INSTRUCTION] Location context:', locationContext.substring(0, 200));
-      console.log('[SYSTEM INSTRUCTION] Has location:', !!userLocationRef.current);
-      
+      // SECURITY: System instruction details not logged to console
       // Construct final structured system instruction
       const structuredSystemInstruction = `<persona_definition>
 ${systemInstructionToUse}
@@ -941,9 +932,8 @@ ${userEmailContext}
 
 ${globalRules}`;
 
-      console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
-      console.log('[CONNECT] API key preview:', currentKey.substring(0, 10) + '...');
-      console.log('[CONNECT] Voice config:', personaRef.current.voiceName);
+      // SECURITY: Removed API key logging - only log non-sensitive connection info
+      if (verbose) console.log('[CONNECT] Calling ai.live.connect with model:', chosenModel);
       dispatchLog('info', 'Connecting', `Model: ${chosenModel.split('/').pop()}`);
       
       let sessionPromise: Promise<any>;
@@ -967,8 +957,7 @@ ${globalRules}`;
             firstResponseReceivedRef.current = false;
             dispatchLog('info', 'DEBUG onopen', 'Gating audio for warmup');
             if (connectionIdRef.current !== myConnectionId) {
-              console.log('[SESSION DEBUG] connectionId mismatch - aborting onopen');
-              return;
+              return; // Session mismatch - abort silently
             }
             // record session open time so we can detect very-short lived sessions
             sessionOpenTimeRef.current = Date.now();
@@ -976,7 +965,7 @@ ${globalRules}`;
             setStatus('connected');
             isConnectedRef.current = true;
             retryCountRef.current = 0;
-            if (verbose) dispatchLog('info', 'DEBUG onopen', `Persona:${personaRef.current.name} keyIndex:${nextIndex} keys:${apiKeys.length}`);
+            if (verbose) dispatchLog('info', 'DEBUG onopen', `Persona:${personaRef.current.name}`);
             
             // Start heartbeat to prevent idle closure
             const heartbeatInterval = setInterval(() => {
@@ -1668,7 +1657,7 @@ ${globalRules}`;
             };
             const codeDesc = codeDescriptions[closeCode] || (closeCode >= 4000 ? 'Google API error' : 'Unknown');
             
-            console.error(`[ONCLOSE] WebSocket closed! Code: ${closeCode} (${codeDesc}), Reason: "${closeReason}", Clean: ${wasClean}`);
+            // SECURITY: Only log to UI, not browser console
             dispatchLog('warn', 'WebSocket Closed', `Code ${closeCode}: ${codeDesc}${closeReason ? ` - ${closeReason}` : ''}`);
             
             // CRITICAL: Immediately stop video frame loop to prevent WebSocket errors
@@ -1680,7 +1669,6 @@ ${globalRules}`;
             
             // Check if onopen ever fired
             const onopenFired = sessionOpenTimeRef.current !== null;
-            console.log('[ONCLOSE] onopen had fired:', onopenFired, 'sessionOpenTime:', sessionOpenTimeRef.current);
             
             // Handle specific close codes - 1007 (invalid key) and 1008 (leaked key)
             if (closeCode === 1007 || closeCode === 1008) {
@@ -1689,19 +1677,15 @@ ${globalRules}`;
               dispatchLog('error', 'API Key Error', `Key ${reasonText}. Rotating to next key...`);
               // CRITICAL: Clear sessionRef so retry can proceed
               sessionRef.current = null;
-              // Immediately retry with next key
-              console.log(`[${closeCode} HANDLER] Blacklisted key, scheduling retry in 500ms`);
+              // Immediately retry with next key (SECURITY: no key info logged)
               stopAudio();
               setTimeout(async () => {
-                console.log(`[${closeCode} RETRY] Attempting reconnect with next key...`);
                 try {
                   if (connectRef.current) {
                     await connectRef.current(true);
-                  } else {
-                    console.error(`[${closeCode} RETRY] connectRef.current is null!`);
                   }
                 } catch (retryErr) {
-                  console.error(`[${closeCode} RETRY] Error:`, retryErr);
+                  // Silently handle retry errors - dispatchLog will show status
                 }
               }, 500);
               return; // Exit early - don't run other onclose logic
@@ -1804,10 +1788,9 @@ ${globalRules}`;
           }
         }
       });
-        console.log('[CONNECT] ai.live.connect() returned promise');
+        // SECURITY: Removed connect debug log
       } catch (connectErr: any) {
-        console.error('[CONNECT] ai.live.connect() threw synchronously:', connectErr);
-        dispatchLog('error', 'Connect Error', String(connectErr?.message || connectErr));
+        dispatchLog('error', 'Connect Error', String(connectErr?.message || connectErr).slice(0, 100));
         throw connectErr;
       }
 
@@ -1816,7 +1799,6 @@ ${globalRules}`;
       // Add timeout for session establishment (10 seconds)
       const connectionTimeout = setTimeout(() => {
         if (!isConnectedRef.current) {
-          console.error('[SESSION] Connection timeout - no onopen callback received within 10s');
           dispatchLog('error', 'Connection Timeout', 'Server did not respond. Rotating to next key...');
           // DON'T blacklist on timeout - just rotate to next key (timeout is often transient)
           rotateToNextKey();
@@ -1827,15 +1809,13 @@ ${globalRules}`;
         }
       }, 10000);
       
-      // Log session promise resolution/rejection for debugging
+      // SECURITY: Session status handled via dispatchLog only (no console logs)
       sessionPromise.then((session: any) => {
         clearTimeout(connectionTimeout);
-        console.log('[SESSION] Promise resolved - session object:', typeof session, session ? 'exists' : 'null');
         dispatchLog('info', 'Session Ready', 'WebSocket connection established');
       }).catch((err: any) => {
         clearTimeout(connectionTimeout);
-        console.error('[SESSION] Promise rejected:', err);
-        dispatchLog('error', 'Session Failed', String(err));
+        dispatchLog('error', 'Session Failed', String(err).slice(0, 100));
         // Mark key as failed if it's an auth issue and trigger retry
         const errMsg = String(err?.message || err);
         if (/401|403|leaked|unauthor|api key/i.test(errMsg)) {

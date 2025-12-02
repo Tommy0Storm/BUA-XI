@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini API Key Tester (Advanced v2)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e4;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 { text-align: center; color: #4fc3f7; margin-bottom: 10px; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 14px; }
+    .input-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    label { display: block; margin-bottom: 8px; color: #4fc3f7; font-weight: 500; }
+    textarea {
+      width: 100%;
+      height: 100px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #fff;
+      padding: 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: #4fc3f7; }
+    .btn {
+      background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+      color: #000;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      margin-right: 10px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+    }
+    .summary-card .count { font-size: 28px; font-weight: bold; }
+    .summary-card .label { font-size: 12px; color: #888; margin-top: 5px; }
+    .working .count { color: #4caf50; }
+    .leaked .count { color: #f44336; }
+    .invalid .count { color: #ff9800; }
+    .quota .count { color: #9c27b0; }
+    .ratelimit .count { color: #00bcd4; }
+    .results { display: flex; flex-direction: column; gap: 15px; }
+    .key-result {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 15px;
+      border-left: 4px solid #666;
+    }
+    .key-result.working { border-left-color: #4caf50; }
+    .key-result.leaked { border-left-color: #f44336; }
+    .key-result.invalid { border-left-color: #ff9800; }
+    .key-result.quota { border-left-color: #9c27b0; }
+    .key-result.ratelimit { border-left-color: #00bcd4; }
+    .key-result.testing { border-left-color: #2196f3; }
+    .key-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .key-name { font-family: 'Consolas', monospace; font-size: 14px; }
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-badge.working { background: rgba(76,175,80,0.2); color: #4caf50; }
+    .status-badge.leaked { background: rgba(244,67,54,0.2); color: #f44336; }
+    .status-badge.invalid { background: rgba(255,152,0,0.2); color: #ff9800; }
+    .status-badge.quota { background: rgba(156,39,176,0.2); color: #9c27b0; }
+    .status-badge.ratelimit { background: rgba(0,188,212,0.2); color: #00bcd4; }
+    .status-badge.testing { background: rgba(33,150,243,0.2); color: #2196f3; }
+    .tests-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .test-item {
+      background: rgba(0,0,0,0.2);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .test-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .test-value { font-size: 13px; }
+    .test-value.pass { color: #4caf50; }
+    .test-value.fail { color: #f44336; }
+    .test-value.warn { color: #ff9800; }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #4fc3f7;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4fc3f7, #2196f3);
+      transition: width 0.3s ease;
+    }
+    .error-details {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(244,67,54,0.1);
+      border-radius: 6px;
+      font-size: 12px;
+      color: #f44336;
+      font-family: 'Consolas', monospace;
+      word-break: break-all;
+    }
+    .error-codes-legend {
+      margin-top: 30px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .error-codes-legend h3 {
+      margin: 0 0 15px 0;
+      color: #4fc3f7;
+      font-size: 16px;
+    }
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 6px;
+    }
+    .legend-code {
+      font-family: 'Consolas', monospace;
+      font-weight: bold;
+      color: #4fc3f7;
+      min-width: 45px;
+    }
+    .legend-desc {
+      font-size: 13px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔑 Gemini API Key Tester</h1>
+    <p class="subtitle">Advanced testing: Basic API, Live WebSocket, and actual generation test to detect leaked keys</p>
+    
+    <div class="input-section">
+      <label>Paste your API keys (comma-separated):</label>
+      <textarea id="keysInput" placeholder="AIzaSyXXXXX..., AIzaSyYYYYY..., AIzaSyZZZZZ..."></textarea>
+      <button class="btn" id="testBtn">▶️ Test All Keys</button>
+      <button class="btn btn-secondary" id="copyBtn" style="display:none;">📋 Copy Valid Keys</button>
+    </div>
+
+    <div class="progress-bar" id="progressBar" style="display:none;">
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+    
+    <div class="summary" id="summary" style="display:none;">
+      <div class="summary-card working">
+        <div class="count" id="workingCount">0</div>
+        <div class="label">Working</div>
+      </div>
+      <div class="summary-card leaked">
+        <div class="count" id="leakedCount">0</div>
+        <div class="label">Leaked</div>
+      </div>
+      <div class="summary-card invalid">
+        <div class="count" id="invalidCount">0</div>
+        <div class="label">Invalid</div>
+      </div>
+      <div class="summary-card ratelimit">
+        <div class="count" id="ratelimitCount">0</div>
+        <div class="label">Rate Limited</div>
+      </div>
+    </div>
+    
+    <div class="results" id="results"></div>
+    
+    <div class="error-codes-legend" id="errorCodesLegend" style="display:none;">
+      <h3>📖 Error Code Reference</h3>
+      <div class="legend-grid">
+        <div class="legend-item">
+          <span class="legend-code">WS 1000</span>
+          <span class="legend-desc">Normal closure - WebSocket closed successfully</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">WS 1007</span>
+          <span class="legend-desc">Invalid API key - key not found or malformed</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">WS 1008</span>
+          <span class="legend-desc">API key leaked/revoked via WebSocket</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">HTTP 200</span>
+          <span class="legend-desc">Success - generation completed OK</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">HTTP 400</span>
+          <span class="legend-desc">Bad request - often "leaked key" on generation test</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">HTTP 429</span>
+          <span class="legend-desc">Rate limited - too many requests, try later</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-code">HTTP 403</span>
+          <span class="legend-desc">Forbidden - API not enabled or no permission</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let workingKeys = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('testBtn').addEventListener('click', testAllKeys);
+      document.getElementById('copyBtn').addEventListener('click', copyWorkingKeys);
+    });
+    
+    async function testAllKeys() {
+      const input = document.getElementById('keysInput').value.trim();
+      if (!input) { alert('Please paste at least one API key'); return; }
+      
+      const keys = input.split(',').map(k => k.trim()).filter(k => k.length > 0);
+      if (keys.length === 0) { 
+        alert('No valid keys found after trimming. Please check your input.'); 
+        return;
+      }
+      
+      document.getElementById('progressBar').style.display = 'block';
+      document.getElementById('summary').style.display = 'grid';
+      document.getElementById('errorCodesLegend').style.display = 'block';
+      workingKeys = [];
+      let counts = { working: 0, leaked: 0, invalid: 0, ratelimit: 0 };
+      
+      for (let i = 0; i < keys.length; i++) {
+        const progress = ((i + 1) / keys.length) * 100;
+        document.getElementById('progressFill').style.width = progress + '%';
+        
+        const result = await testKey(keys[i], i);
+        counts[result.status]++;
+        
+        document.getElementById('workingCount').textContent = counts.working;
+        document.getElementById('leakedCount').textContent = counts.leaked;
+        document.getElementById('invalidCount').textContent = counts.invalid;
+        document.getElementById('ratelimitCount').textContent = counts.ratelimit;
+        
+        if (result.status === 'working' || result.status === 'ratelimit') workingKeys.push(keys[i]);
+      }
+      
+      document.getElementById('testBtn').disabled = false;
+      if (workingKeys.length > 0) {
+        document.getElementById('copyBtn').style.display = 'inline-block';
+      }
+    }
+    
+    async function testKey(key, index) {
+      const preview = key.substring(0, 15) + '...';
+      const resultDiv = document.createElement('div');
+      resultDiv.className = 'key-result testing';
+      resultDiv.id = `key-${index}`;
+      resultDiv.innerHTML = `
+        <div class="key-header">
+          <span class="key-name">Key ${index}: ${preview}</span>
+          <span class="status-badge testing"><span class="spinner"></span> Testing</span>
+        </div>
+        <div class="tests-grid">
+          <div class="test-item"><div class="test-label">Basic API</div><div class="test-value">Testing...</div></div>
+          <div class="test-item"><div class="test-label">Live WebSocket</div><div class="test-value">Pending...</div></div>
+          <div class="test-item"><div class="test-label">Generation Test</div><div class="test-value">Pending...</div></div>
+          <div class="test-item"><div class="test-label">WS Code</div><div class="test-value">-</div></div>
+          <div class="test-item"><div class="test-label">HTTP Code</div><div class="test-value">-</div></div>
+        </div>
+      `;
+      document.getElementById('results').appendChild(resultDiv);
+      
+      const tests = resultDiv.querySelectorAll('.test-item .test-value');
+      let status = 'working';
+      let errorDetail = '';
+      
+      // Test 1: Basic API (list models)
+      try {
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+        const data = await resp.json();
+        if (resp.ok) {
+          tests[0].textContent = `✅ ${data.models?.length || 0} models`;
+          tests[0].className = 'test-value pass';
+        } else {
+          const errMsg = data.error?.message || 'Unknown error';
+          tests[0].textContent = `❌ ${errMsg.substring(0, 30)}`;
+          tests[0].className = 'test-value fail';
+          if (errMsg.includes('not found') || errMsg.includes('invalid')) {
+            status = 'invalid';
+            errorDetail = errMsg;
+          }
+        }
+      } catch (e) {
+        tests[0].textContent = `❌ ${e.message.substring(0, 25)}`;
+        tests[0].className = 'test-value fail';
+      }
+      
+      // Test 2: WebSocket connection
+      let wsCloseCode = null;
+      let wsCloseReason = '';
+      try {
+        const wsResult = await testWebSocket(key);
+        wsCloseCode = wsResult.code;
+        wsCloseReason = wsResult.reason;
+        
+        if (wsCloseCode === 1000 || wsCloseCode === null) {
+          tests[1].textContent = '✅ Connected';
+          tests[1].className = 'test-value pass';
+        } else if (wsCloseCode === 1008) {
+          tests[1].textContent = '❌ LEAKED (1008)';
+          tests[1].className = 'test-value fail';
+          status = 'leaked';
+          errorDetail = wsCloseReason;
+        } else if (wsCloseCode === 1007) {
+          tests[1].textContent = '❌ Invalid (1007)';
+          tests[1].className = 'test-value fail';
+          status = 'invalid';
+          errorDetail = wsCloseReason;
+        } else {
+          tests[1].textContent = `⚠️ Code ${wsCloseCode}`;
+          tests[1].className = 'test-value warn';
+        }
+        tests[3].textContent = wsCloseCode ? `${wsCloseCode}` : 'OK';
+      } catch (e) {
+        tests[1].textContent = `❌ ${e.message.substring(0, 20)}`;
+        tests[1].className = 'test-value fail';
+        tests[3].textContent = 'Error';
+      }
+      
+      // Test 3: Actual generation (most accurate for leak detection)
+      if (status === 'working') {
+        try {
+          tests[2].textContent = 'Testing...';
+          const genResult = await testGeneration(key);
+          tests[4].textContent = genResult.httpCode || '-';
+          if (genResult.success) {
+            tests[2].textContent = '✅ Generated OK';
+            tests[2].className = 'test-value pass';
+            tests[4].className = 'test-value pass';
+          } else {
+            tests[2].textContent = `❌ ${genResult.error.substring(0, 25)}`;
+            tests[2].className = 'test-value fail';
+            tests[4].className = 'test-value fail';
+            // Check HTTP code first for rate limiting (compare as number)
+            const httpCode = parseInt(genResult.httpCode);
+            if (httpCode === 429 || genResult.error.toLowerCase().includes('quota') || genResult.error.toLowerCase().includes('resource exhausted') || genResult.error.toLowerCase().includes('rate') || genResult.error.includes('too many requests')) {
+              status = 'ratelimit';
+              errorDetail = genResult.error;
+            } else if (genResult.error.includes('leaked') || genResult.error.includes('revoked')) {
+              status = 'leaked';
+              errorDetail = genResult.error;
+            } else if (genResult.error.includes('invalid') || genResult.error.includes('not found')) {
+              status = 'invalid';
+              errorDetail = genResult.error;
+            }
+          }
+        } catch (e) {
+          tests[2].textContent = `⚠️ ${e.message.substring(0, 20)}`;
+          tests[2].className = 'test-value warn';
+        }
+      } else {
+        tests[2].textContent = 'Skipped';
+        tests[2].className = 'test-value';
+        tests[4].textContent = '-';
+      }
+      
+      // Update final status
+      resultDiv.className = `key-result ${status}`;
+      const badge = resultDiv.querySelector('.status-badge');
+      badge.className = `status-badge ${status}`;
+      badge.textContent = status.toUpperCase();
+      
+      if (errorDetail) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error-details';
+        errorDiv.textContent = errorDetail;
+        resultDiv.appendChild(errorDiv);
+      }
+      
+      return { status, key };
+    }
+    
+    function testWebSocket(key) {
+      return new Promise((resolve) => {
+        const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+        const ws = new WebSocket(url);
+        let resolved = false;
+        
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            ws.close();
+            resolve({ code: null, reason: 'Timeout' });
+          }
+        }, 5000);
+        
+        ws.onopen = () => {
+          // Send setup message to properly initialize the session
+          const setup = {
+            setup: {
+              model: "models/gemini-2.0-flash-live-001",
+              generationConfig: { responseModalities: ["TEXT"] }
+            }
+          };
+          ws.send(JSON.stringify(setup));
+          
+          // Wait a bit to see if server kicks us out
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              ws.close(1000);
+              resolve({ code: 1000, reason: 'OK' });
+            }
+          }, 2000);
+        };
+        
+        ws.onclose = (e) => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve({ code: e.code, reason: e.reason || '' });
+          }
+        };
+        
+        ws.onerror = () => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve({ code: -1, reason: 'Connection error' });
+          }
+        };
+      });
+    }
+    
+    async function testGeneration(key) {
+      try {
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Say "test" and nothing else.' }] }],
+            generationConfig: { maxOutputTokens: 10 }
+          })
+        });
+        
+        const data = await resp.json();
+        const httpCode = resp.status;
+        
+        if (resp.ok && data.candidates) {
+          return { success: true, httpCode: httpCode };
+        } else {
+          const errMsg = data.error?.message || JSON.stringify(data);
+          return { success: false, error: errMsg, httpCode: httpCode };
+        }
+      } catch (e) {
+        return { success: false, error: e.message, httpCode: 'ERR' };
+      }
+    }
+    
+    function copyWorkingKeys() {
+      if (workingKeys.length === 0) { alert('No valid keys to copy'); return; }
+      navigator.clipboard.writeText(workingKeys.join(','))
+        .then(() => alert(`Copied ${workingKeys.length} valid keys (Working + Rate Limited) to clipboard!`))
+        .catch(() => alert('Failed to copy'));
+    }
+  </script>
+</body>
+</html>

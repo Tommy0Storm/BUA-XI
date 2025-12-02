@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini API Key Tester (Advanced)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e4;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #4fc3f7;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 30px;
+    }
+    .input-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #4fc3f7;
+      font-weight: 500;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #fff;
+      padding: 12px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+      resize: vertical;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #4fc3f7;
+    }
+    .btn {
+      background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+      color: #000;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(79, 195, 247, 0.4);
+    }
+    .btn:disabled {
+      background: #555;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .results {
+      margin-top: 20px;
+    }
+    .key-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-left: 4px solid #555;
+    }
+    .key-card.working { border-left-color: #4caf50; }
+    .key-card.leaked { border-left-color: #f44336; }
+    .key-card.invalid { border-left-color: #ff9800; }
+    .key-card.error { border-left-color: #9c27b0; }
+    .key-card.testing { border-left-color: #2196f3; animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .key-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .key-index {
+      font-size: 14px;
+      color: #888;
+    }
+    .key-preview {
+      font-family: 'Consolas', monospace;
+      font-size: 14px;
+      color: #4fc3f7;
+    }
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-badge.working { background: #4caf50; color: #fff; }
+    .status-badge.leaked { background: #f44336; color: #fff; }
+    .status-badge.invalid { background: #ff9800; color: #000; }
+    .status-badge.error { background: #9c27b0; color: #fff; }
+    .status-badge.testing { background: #2196f3; color: #fff; }
+    .test-results {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .test-item {
+      background: rgba(0,0,0,0.2);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .test-item .label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .test-item .value {
+      font-size: 14px;
+      color: #fff;
+    }
+    .test-item .value.success { color: #4caf50; }
+    .test-item .value.fail { color: #f44336; }
+    .test-item .value.warn { color: #ff9800; }
+    .summary {
+      background: rgba(79, 195, 247, 0.1);
+      border: 1px solid rgba(79, 195, 247, 0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+      display: none;
+    }
+    .summary h3 {
+      margin: 0 0 15px 0;
+      color: #4fc3f7;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      text-align: center;
+    }
+    .summary-item .count {
+      font-size: 32px;
+      font-weight: 700;
+    }
+    .summary-item .label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+    }
+    .summary-item.working .count { color: #4caf50; }
+    .summary-item.leaked .count { color: #f44336; }
+    .summary-item.invalid .count { color: #ff9800; }
+    .summary-item.error .count { color: #9c27b0; }
+    .progress {
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      height: 6px;
+      margin-top: 15px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4fc3f7, #2196f3);
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .copy-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 15px;
+      display: none;
+    }
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔑 Gemini API Key Tester</h1>
+    <p class="subtitle">Test your API keys against Basic API, Live WebSocket API, and check usage quotas</p>
+    
+    <div class="input-section">
+      <label for="keys">Paste your API keys (comma-separated):</label>
+      <textarea id="keys" placeholder="AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX,AIzaSyYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY,..."></textarea>
+      <button class="btn" id="testBtn" onclick="testAllKeys()">🧪 Test All Keys</button>
+      <div class="progress" id="progress">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+    </div>
+    
+    <div class="summary" id="summary">
+      <h3>📊 Summary</h3>
+      <div class="summary-grid">
+        <div class="summary-item working">
+          <div class="count" id="workingCount">0</div>
+          <div class="label">Working</div>
+        </div>
+        <div class="summary-item leaked">
+          <div class="count" id="leakedCount">0</div>
+          <div class="label">Leaked</div>
+        </div>
+        <div class="summary-item invalid">
+          <div class="count" id="invalidCount">0</div>
+          <div class="label">Invalid</div>
+        </div>
+        <div class="summary-item error">
+          <div class="count" id="errorCount">0</div>
+          <div class="label">Error</div>
+        </div>
+      </div>
+      <button class="copy-btn" id="copyBtn" onclick="copyWorkingKeys()">📋 Copy Working Keys</button>
+    </div>
+    
+    <div class="results" id="results"></div>
+  </div>
+
+  <script>
+    const results = { working: [], leaked: [], invalid: [], error: [] };
+    
+    async function testAllKeys() {
+      const input = document.getElementById('keys').value.trim();
+      if (!input) {
+        alert('Please paste your API keys first!');
+        return;
+      }
+      
+      const keys = input.split(',').map(k => k.trim()).filter(k => k.length > 0);
+      if (keys.length === 0) {
+        alert('No valid keys found!');
+        return;
+      }
+      
+      // Reset
+      results.working = [];
+      results.leaked = [];
+      results.invalid = [];
+      results.error = [];
+      
+      document.getElementById('testBtn').disabled = true;
+      document.getElementById('testBtn').textContent = '⏳ Testing...';
+      document.getElementById('progress').style.display = 'block';
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('summary').style.display = 'none';
+      document.getElementById('copyBtn').style.display = 'none';
+      
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        const progress = ((i + 1) / keys.length) * 100;
+        document.getElementById('progressBar').style.width = progress + '%';
+        
+        await testKey(key, i);
+        await sleep(500); // Rate limiting
+      }
+      
+      // Show summary
+      document.getElementById('workingCount').textContent = results.working.length;
+      document.getElementById('leakedCount').textContent = results.leaked.length;
+      document.getElementById('invalidCount').textContent = results.invalid.length;
+      document.getElementById('errorCount').textContent = results.error.length;
+      document.getElementById('summary').style.display = 'block';
+      
+      if (results.working.length > 0) {
+        document.getElementById('copyBtn').style.display = 'inline-block';
+      }
+      
+      document.getElementById('testBtn').disabled = false;
+      document.getElementById('testBtn').textContent = '🧪 Test All Keys';
+      document.getElementById('progress').style.display = 'none';
+    }
+    
+    async function testKey(key, index) {
+      const preview = key.substring(0, 15) + '...';
+      const cardId = `card-${index}`;
+      
+      // Create card
+      const card = document.createElement('div');
+      card.id = cardId;
+      card.className = 'key-card testing';
+      card.innerHTML = `
+        <div class="key-header">
+          <div>
+            <span class="key-index">Key ${index}</span>
+            <span class="key-preview">${preview}</span>
+          </div>
+          <span class="status-badge testing">Testing...</span>
+        </div>
+        <div class="test-results">
+          <div class="test-item">
+            <div class="label">Basic API</div>
+            <div class="value">⏳ Testing...</div>
+          </div>
+          <div class="test-item">
+            <div class="label">Live WebSocket</div>
+            <div class="value">⏳ Pending...</div>
+          </div>
+          <div class="test-item">
+            <div class="label">Models Available</div>
+            <div class="value">-</div>
+          </div>
+          <div class="test-item">
+            <div class="label">Close Code</div>
+            <div class="value">-</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('results').appendChild(card);
+      
+      let status = 'error';
+      let basicResult = { success: false, models: 0, error: '' };
+      let wsResult = { success: false, code: null, reason: '' };
+      
+      // Test 1: Basic API (models list)
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+        if (response.ok) {
+          const data = await response.json();
+          basicResult = { success: true, models: data.models?.length || 0, error: '' };
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          basicResult = { success: false, models: 0, error: errorData.error?.message || response.statusText };
+        }
+      } catch (e) {
+        basicResult = { success: false, models: 0, error: e.message };
+      }
+      
+      updateCard(cardId, 0, basicResult.success ? 
+        `<span class="success">✅ OK</span>` : 
+        `<span class="fail">❌ ${basicResult.error.substring(0, 30)}</span>`);
+      updateCard(cardId, 2, basicResult.models > 0 ? 
+        `<span class="success">${basicResult.models} models</span>` : 
+        `<span class="fail">0</span>`);
+      
+      // Test 2: Live WebSocket API
+      updateCard(cardId, 1, '⏳ Testing...');
+      wsResult = await testWebSocket(key);
+      
+      // Determine final status
+      if (wsResult.success) {
+        status = 'working';
+        results.working.push(key);
+        updateCard(cardId, 1, `<span class="success">✅ Connected</span>`);
+        updateCard(cardId, 3, `<span class="success">OK</span>`);
+      } else if (wsResult.code === 1008) {
+        status = 'leaked';
+        results.leaked.push(key);
+        updateCard(cardId, 1, `<span class="fail">❌ LEAKED</span>`);
+        updateCard(cardId, 3, `<span class="fail">1008 - Leaked</span>`);
+      } else if (wsResult.code === 1007 || wsResult.reason.includes('not found')) {
+        status = 'invalid';
+        results.invalid.push(key);
+        updateCard(cardId, 1, `<span class="warn">⚠️ Invalid</span>`);
+        updateCard(cardId, 3, `<span class="warn">${wsResult.code || 'N/A'} - Invalid</span>`);
+      } else {
+        status = 'error';
+        results.error.push(key);
+        updateCard(cardId, 1, `<span class="fail">❌ Error</span>`);
+        updateCard(cardId, 3, `<span class="fail">${wsResult.code || 'N/A'} - ${wsResult.reason.substring(0, 20)}</span>`);
+      }
+      
+      // Update card status
+      card.className = `key-card ${status}`;
+      card.querySelector('.status-badge').className = `status-badge ${status}`;
+      card.querySelector('.status-badge').textContent = status.toUpperCase();
+    }
+    
+    function updateCard(cardId, testIndex, html) {
+      const card = document.getElementById(cardId);
+      if (card) {
+        const values = card.querySelectorAll('.test-item .value');
+        if (values[testIndex]) {
+          values[testIndex].innerHTML = html;
+        }
+      }
+    }
+    
+    async function testWebSocket(key) {
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve({ success: false, code: null, reason: 'Timeout' });
+        }, 10000);
+        
+        try {
+          const ws = new WebSocket(
+            `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`
+          );
+          
+          ws.onopen = () => {
+            clearTimeout(timeout);
+            ws.close(1000, 'Test complete');
+            resolve({ success: true, code: 1000, reason: 'OK' });
+          };
+          
+          ws.onclose = (e) => {
+            clearTimeout(timeout);
+            if (e.code === 1000 && e.reason === 'Test complete') {
+              // We closed it ourselves
+              return;
+            }
+            resolve({ success: false, code: e.code, reason: e.reason || 'Closed' });
+          };
+          
+          ws.onerror = (e) => {
+            clearTimeout(timeout);
+            resolve({ success: false, code: null, reason: 'WebSocket error' });
+          };
+        } catch (e) {
+          clearTimeout(timeout);
+          resolve({ success: false, code: null, reason: e.message });
+        }
+      });
+    }
+    
+    function copyWorkingKeys() {
+      if (results.working.length === 0) {
+        alert('No working keys to copy!');
+        return;
+      }
+      
+      const text = results.working.join(',');
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => {
+          btn.textContent = '📋 Copy Working Keys';
+        }, 2000);
+      }).catch(err => {
+        alert('Failed to copy: ' + err);
+      });
+    }
+    
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+  </script>
+</body>
+</html>
